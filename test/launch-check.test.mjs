@@ -46,7 +46,7 @@ test('launch check reports missing MCP tools, extension tools, skills and unveri
 
   // A hidden tool can't be selected.
   const hidden = launchCheck(root, { ...model, agents: [{ name: 'del', model: 'p/m', tools: ['mcp:seo/delete_all'] }] }, { mcpTools }).problems;
-  assert.ok(hidden.some((p) => p.problem === 'mcp:seo/delete_all: "delete_all" is hidden by includeTools, excludeTools or a hide policy'));
+  assert.ok(hidden.some((p) => p.problem === 'mcp:seo/delete_all: "delete_all" is hidden by includeTools or excludeTools'));
 
   // Everything present: no problems.
   mkdirSync(join(root, '.agents/skills/audit'), { recursive: true });
@@ -54,6 +54,13 @@ test('launch check reports missing MCP tools, extension tools, skills and unveri
   assert.deepEqual(problems(root, { registeredTools: ['web_search'], mcpTools: [{ name: 'mcp__seo__audit', exposure: 'deferred' }, { name: 'mcp__github__issue_read', exposure: 'deferred' }] }), ['seo: web_search: foreground extension loading is not verified; the native agent tools list must include the providing extension path']);
 
 
+});
+
+test('omitted lead tools do not imply access to every declared command', t => {
+  const root = project(t);
+  const design = { schema: 1, name: 'test', orchestrator: { name: 'lead', model: 'p/m' }, integrations: { cli: [{ name: 'missing', command: 'faur-command-that-does-not-exist' }] } };
+  const result = launchCheck(root, design, { probe: () => false });
+  assert.ok(!result.problems.some(item => item.problem.includes('cli:missing')));
 });
 
 test('launch check warns about unignored secrets in a git work tree', t => {
@@ -150,6 +157,27 @@ test('live launch check does not assume a missing extension is an uninstalled pa
   const result = launchCheck(root, declared, { registeredTools: [] });
   assert.ok(result.problems.some(p => p.problem.includes('subagent: no loaded extension')));
   assert.ok(result.problems.every(p => !p.problem.includes("run ./run once")));
+});
+
+test('checkProject distinguishes unverified setup from passing or failing checks', async t => {
+  const { checkProject } = await import('../src/check.mjs');
+  const yaml = (await import('../src/yaml-loader.mjs')).loadYaml();
+  const root = mkdtempSync(join(tmpdir(), 'faur-check-setup-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const doc = { schema: 1, name: 'setup-check', orchestrator: { name: 'lead', model: 'p/m' }, setup: [{ description: 'missing setup', check: { command: 'false' }, install: 'true' }] };
+  mkdirSync(join(root, '.pi'));
+  writeFileSync(join(root, '.pi/system.yaml'), yaml.stringify(doc));
+  for (const f of generateProject(doc, {}).files) { mkdirSync(dirname(join(root, f.path)), { recursive: true }); writeFileSync(join(root, f.path), f.content); }
+  const opts = { hostAgentDir: join(root, 'empty-home') };
+  const skipped = checkProject(root, { ...opts, runSetupChecks: false });
+  assert.equal(skipped.ok, null);
+  assert.equal(skipped.setupChecks, 'not verified');
+  assert.ok(!skipped.launch.some(p => p.includes('missing setup')));
+  const checked = checkProject(root, opts);
+  assert.equal(checked.ok, false);
+  assert.ok(checked.launch.some(p => p.includes('missing setup')));
+  writeFileSync(join(root, '.pi/system.yaml'), 'schema: 999\n');
+  assert.equal(checkProject(root, { ...opts, runSetupChecks: false }).setupChecks, 'not verified');
 });
 
 test('the check reports a user-level package that replaces built-in MCP, and declared env names that are unset', async t => {

@@ -25,7 +25,6 @@ Top-level keys (all others rejected):
 | `agents` | no | array | specialist subagents (→ `.pi/agents/*.md`) |
 | `skills` | no | array | authored, packaged or vendored skills (→ `.pi/skills/*/`) |
 | `integrations` | no | object | MCP servers + env requirements |
-| `policies` | no | object | enforced + advisory policy |
 | `setup` | no | array | project setup checks and installs (see Setup checks) |
 | `packages` | no | array of `npm:`/`git:` specs | additional runtime extension packages (`pi-subagents` is always included; `pi-mcp-adapter` is rejected because it would replace Pi's built-in MCP; packaged skill sources are added automatically) |
 
@@ -69,8 +68,7 @@ Allowed keys: `name` (required string), `description`, `prompt`, `model`
 and records them in `system.yaml` on the next change; the preview names the
 added tools. `codemode` is never added implicitly: list it to grant it. Unlike
 file browsing, it can reach other exposed tools, including inherited global
-MCP servers, even when those tools are not directly listed. `tools: []` stays empty, an omitted list keeps Pi's defaults, and an
-enforced `{ agent, tools }` rule is not extended. A native edit that drops a
+MCP servers, even when those tools are not directly listed. `tools: []` stays empty; omitted lists request the browsing baseline. A native edit that drops a
 baseline tool cannot be adopted; Faur refuses and says why. The tools an agent
 can actually call depend on Pi and its packages; a list is not OS isolation.
 
@@ -93,7 +91,7 @@ orchestrator's specialist launch note is in the same section. It is build
 output: it changes when the system is regenerated,
 not when the Faur tooling is updated. A change
 that removes an MCP server, command or skill reports `staleMentions`: the
-prompts and advisory policies that still name it.
+prompts that still name it.
 
 ### `agents[]`
 
@@ -159,12 +157,12 @@ Allowed keys: `mcp` (array), `env` (array) and `cli` (array).
     the rest of the server is hidden. Without it, the server's tools are
     `deferred`: the orchestrator finds them with `tool_search`.
   - `excludeTools`: tools nobody may use (`hidden`: registered but
-    unreachable, also for specialists). An enforced `hide` policy adds to it.
+    unreachable, also for specialists, when Pi built-in MCP handles the server).
   `exposure` and `toolExposure` are rejected: Faur derives them. Pi's automatic
   codemode activation is disabled (`autoEnableCodemode: false`) to preserve
-  tool lists and policy ceilings; an agent gets codemode only when its `tools`
+  tool lists; an agent gets codemode only when its `tools`
   list names it. Codemode can reach exposed global and project MCP tools. Pi names each tool `mcp__<server>__<tool>`. An
-  orchestrator with `mcp` in its tools (or without `tools`) is told about every
+  orchestrator with `mcp` in its tools is told about every
   server's usable tools; without it, it is told it has none, while its
   specialists get their `mcp:` selections. That is advisory: nothing stops
   the orchestrator calling an MCP tool. Faur does not provide per-call MCP
@@ -202,11 +200,9 @@ Allowed keys: `mcp` (array), `env` (array) and `cli` (array).
   project pins it and gets a generated `.pi/commands.json`; Faur takes no part
   at run time.
 
-  An agent gets a command by listing `cli:<name>` in its `tools` (or an
-  enforced policy rule's `tools`); every `cli:` reference must name a declared
+  An agent gets a command by listing `cli:<name>` in its `tools`; every `cli:` reference must name a declared
   entry. In Pi the tool is `cli_<name>` (hyphens become underscores). The
-  orchestrator gets the commands its `tools` list, or all of them when its
-  `tools` is omitted; a subagent gets exactly the ones in its allowlist.
+  orchestrator gets the commands its `tools` list; a subagent gets exactly the ones in its allowlist.
   `/faur permissions` (list, add, remove) edits these
   declarations through the normal preview. An agent that needs a command it
   has no tool for says so; adding one is a design change made through Faur.
@@ -223,18 +219,6 @@ Allowed keys: `mcp` (array), `env` (array) and `cli` (array).
       tools: [read, write, "cli:create-issue"]
   ```
 
-### `policies`
-
-Allowed keys: `enforced` (array) and `advisory` (array of strings).
-
-- `enforced[]` entries carry exactly one discriminator:
-  - `{ agent: <agents[].name>, tools: [string, …] }` → subagent tool allowlist,
-    the ceiling: it replaces the agent's `tools` and is not extended by the
-    browsing baseline.
-  - `{ mcp: <integrations.mcp[].name>, hide: [string, …] }` → MCP
-    hidden tools in `.pi/mcp.json` (registered but unreachable).
-- `advisory[]` are behavioral guidance strings (README + skill text).
-
 ## 2. Validation rules
 
 `validateSystem(doc)` returns `{ ok, errors[] }`. Errors name the offending
@@ -250,15 +234,15 @@ path/key and the expected value. Rejected conditions:
 - unresolved references (agent, skill, MCP names, including
   `agents[].skills`);
 - an unrecognized skill `source`;
-- incompatible configurations (a policy referencing an undeclared agent/MCP);
 - duplicate `name` within `agents[]`, `skills[]`, or `integrations.mcp[]`.
 
 The skill name `faur` is reserved (it is the Faur skill) and cannot be declared in
 `skills[]`. Operational model edits use the structured operations of
 `/faur`, which reuse this validator and reject dangling references.
 The Faur version is the pinned package in `.pi/settings.json` (recorded in
-`.faur/build.json`), never part of this operational model. An explicit empty orchestrator `tools: []` stays empty; omitted tools use Pi
-defaults.
+`.faur/build.json`), never part of this operational model. An explicit empty orchestrator `tools: []` stays empty; omitted tools request the browsing baseline. Lead defaultTools controls built-in tools; independently registered extension tools may remain active, and MCP exposure is configured separately.
+
+`policies` is no longer accepted. Move MCP hide rules to `integrations.mcp[].config.excludeTools` and advisory instructions to prompts or skills. Review agent restrictions explicitly: narrower nonempty specialist allowlists cannot be represented, so do not silently replace them with the browsing baseline. Import and native adoption refuse omitted or narrower native tool lists when representing them would change access; review those lists before importing or adopting.
 
 ## 3. Schema versions
 

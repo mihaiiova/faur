@@ -182,12 +182,3 @@ integrations:
   env:
     - secret: false
       name: GOOGLE_DRIVE_MCP_SCOPES
-policies:
-  advisory:
-    - No website publishing, outreach, website changes, or self-improvement.
-      Private Drive writes within the owner-designated marketing folder are
-      allowed without per-write approval; no sharing, deletion, or writes
-      outside the folder.
-    - Check for duplicate issues and obtain explicit approval for each new issue.
-    - Paid SEO research is authorized; keep research focused and explain known
-      costs.

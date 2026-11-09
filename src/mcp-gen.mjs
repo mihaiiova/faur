@@ -5,7 +5,7 @@
  * HTTP `url`/`headers`/`oauth`, plus `description`, `timeout`) are emitted
  * verbatim. `includeTools` and `excludeTools` are Faur's keys,
  * not Pi's, and become exposure:
- *   - tools nobody may use (`excludeTools`, enforced `hide` policies) are
+ *   - tools nobody may use (`excludeTools`) are
  *     `hidden`: registered but unreachable, and not selectable by specialists;
  *   - with `includeTools`, the rest of the server is hidden and those tools are
  *     declared directly;
@@ -16,7 +16,6 @@
  * model; `system.yaml` is authoritative, so an undeclared server never
  * survives regeneration.
  */
-import { hiddenMcpTools } from "./policy.mjs";
 
 const FAUR_KEYS = ["includeTools", "excludeTools"];
 
@@ -43,9 +42,9 @@ export function mcpToolName(server, tool) {
  * capability section so the two cannot disagree.
  * @returns {{ hidden: string[], included: string[] | null }}
  */
-export function mcpExposure(entry, policies) {
+export function mcpExposure(entry) {
   const config = isPlainObject(entry?.config) ? entry.config : {};
-  const hidden = [...new Set([...strings(config.excludeTools), ...hiddenMcpTools(entry?.name, policies)])];
+  const hidden = [...new Set(strings(config.excludeTools))];
   // Exact names win over patterns in Pi, so an included name a hidden
   // pattern covers is left out rather than listed.
   const included = config.includeTools === undefined ? null
@@ -55,16 +54,15 @@ export function mcpExposure(entry, policies) {
 
 /**
  * @param {Array} mcpList the validated `integrations.mcp[]` entries.
- * @param {object|undefined} policies the validated `policies` block.
  * @returns {Record<string, object>} the `mcpServers` map, strictly declared.
  */
-export function mcpFromIntegrations(mcpList, policies) {
+export function mcpFromIntegrations(mcpList) {
   const servers = {};
   for (const entry of Array.isArray(mcpList) ? mcpList : []) {
     if (!isPlainObject(entry) || !isNonEmptyString(entry.name)) continue;
     const config = isPlainObject(entry.config) ? entry.config : {};
     const server = Object.fromEntries(Object.entries(config).filter(([key]) => !FAUR_KEYS.includes(key)));
-    const { hidden, included } = mcpExposure(entry, policies);
+    const { hidden, included } = mcpExposure(entry);
     const toolExposure = Object.fromEntries(hidden.map((tool) => [tool, "hidden"]));
     for (const tool of included ?? []) toolExposure[tool] ??= "direct";
     server.exposure = included ? "hidden" : "deferred";

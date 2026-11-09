@@ -25,7 +25,7 @@ import { createHash } from "node:crypto";
 import { splitModelRef } from "./models.mjs";
 import { vendoredSkills, skillSourceKind } from "./skill-sources.mjs";
 import { mcpFromIntegrations } from "./mcp-gen.mjs";
-import { enforcedAgentTools, advisoryText } from "./policy.mjs";
+import { withBaseline, withBaselineTools } from "./tool-selection.mjs";
 import { buildRuntimePlan } from "./runtime.mjs";
 import { runtimeNeeds, COMMANDS_PACKAGE } from "./deps.mjs";
 import { integrationSecrets, gitignoreSafety, REQUIRED_IGNORES } from './integration-secrets.mjs';
@@ -61,7 +61,7 @@ export const COMMANDS_CONFIG = ".pi/commands.json";
 /** `.pi/commands.json`: each declared command, and whether the lead may run it. */
 function commandsConfig(model) {
   const lead = isPlainObject(model.orchestrator) ? model.orchestrator.name : undefined;
-  const effective = (agent) => enforcedAgentTools(agent.name, model.policies, agent.tools);
+  const effective = (agent) => withBaseline(agent.tools);
   return `${JSON.stringify({ commands: cliEntries(model).map((c) => ({
     name: c.name,
     ...(isNonEmptyString(c.description) ? { description: c.description } : {}),
@@ -292,9 +292,8 @@ function buildMcpJson(model, existingText) {
   delete out.mcpServers;
   delete out.autoEnableCodemode;
   const integrations = isPlainObject(model.integrations) ? model.integrations : {};
-  out.mcpServers = mcpFromIntegrations(integrations.mcp, model.policies);
-  // Avoid implicitly activating codemode when a tool list or enforced policy
-  // omits it. Explicit baseline lists activate it through Pi's settings.
+  out.mcpServers = mcpFromIntegrations(integrations.mcp);
+  // Avoid implicitly activating codemode when a tool list omits it. Explicit lists activate it through Pi's settings.
   out.autoEnableCodemode = false;
   return `${JSON.stringify(out, null, 2)}\n`;
 }
@@ -314,33 +313,13 @@ function orchestratorDerived(model) {
   return parts.filter(Boolean).map((part) => part.replace(/\n+$/, "")).join("\n\n");
 }
 
-function policySection(model) {
-  const policies = isPlainObject(model.policies) ? model.policies : {};
-  const enforced = Array.isArray(policies.enforced) ? policies.enforced : [];
-  const advisory = advisoryText(policies);
-
-  const lines = ["## Policy", "", "### Enforced by Pi's tool layer", ""];
-  const enforcedLines = [];
-  for (const rule of enforced) {
-    if (!isPlainObject(rule)) continue;
-    if (typeof rule.agent === "string" && Array.isArray(rule.tools)) {
-      const tools = rule.tools.length ? rule.tools.join(", ") : "(none)";
-      enforcedLines.push(`- \`${rule.agent}\` is restricted to tools: ${tools}`);
-    } else if (typeof rule.mcp === "string" && Array.isArray(rule.hide) && rule.hide.length) {
-      enforcedLines.push(`- MCP server \`${rule.mcp}\` hides tools: ${rule.hide.join(", ")}`);
-    }
-  }
-  // Each enforced rule names what enforces it.
+function capabilityLimits(model) {
   const commands = cliEntries(model);
-  if (commands.length) enforcedLines.push(`- Declared commands run without a shell, with only their {placeholders} filled in; ${commands.some((c) => c.approve !== false) ? "those that ask need your approval for each run and are refused without a UI" : "none asks before running"} (pi-commands, \`${COMMANDS_PACKAGE}\`).`);
-  lines.push(...(enforcedLines.length ? enforcedLines : ["None declared."]));
-  // A tool allowlist limits which tools an agent calls, not what a shell reaches.
-  if (enforcedLines.length) lines.push("", "An agent with `bash` or a shell-like command can still reach anything your user account can.");
-  const leadWithoutMcp = Array.isArray(model.integrations?.mcp) && model.integrations.mcp.length && Array.isArray(model.orchestrator?.tools) && !model.orchestrator.tools.includes("mcp");
-  const notes = [...advisory, ...(leadWithoutMcp ? [`\`${model.orchestrator.name}\` is told it has no MCP tools; it is not prevented from calling them, and its specialists have them anyway.`] : [])];
-  lines.push("", "### Advisory (guidance — not enforced)", "");
-  lines.push(...(notes.length ? notes.map((line) => `- ${line}`) : ["None declared."]));
-  lines.push("");
+  const lines = ["## Capabilities and limits", "", "Lead defaultTools controls built-in tools; independently registered extension tools may remain active, and MCP exposure is configured separately."];
+  if (model.agents?.length) lines.push("Specialist tool lists are enforced by pi-subagents.");
+  if (model.integrations?.mcp?.length) lines.push("Pi built-in MCP enforces server tool hiding; a conflicting global MCP extension may replace it. Disable conflicts or arrange isolation independently.");
+  if (commands.length) lines.push(`Declared commands run without a shell; commands configured to ask require approval and are refused without a UI (pi-commands, \`${COMMANDS_PACKAGE}\`).`);
+  lines.push("Plain Pi inherits global configuration. Tool lists are not OS isolation: bash and shell-like commands can reach what the user account can.", "Agent instructions are advisory, not enforced.", "");
   return lines.join("\n");
 }
 
@@ -374,7 +353,7 @@ function readmeBody(model, packages) {
       "",
     ] : []),
     "Authenticate with `/login`, or export the provider-specific key (for",
-    "example `DEEPSEEK_API_KEY`). See the policy section below for which",
+    "example `DEEPSEEK_API_KEY`). See the capability section below for which",
     "capabilities are enforced vs advisory.",
     ...(model.integrations?.env?.length ? ["Integration variables (listed in `.env.example`) come from the environment you start Pi in: export them, or load `.env` with direnv (`dotenv` in `.envrc`). `/faur check` reports any that are unset."] : []),
     ...[...new Set(integrationSecrets(model))].map(path => `Configure integration secrets in \`${path}\` outside Faur. Faur does not load this file; configure the integration to read it.`),
@@ -394,7 +373,7 @@ function readmeBody(model, packages) {
     'it and `/faur permissions` to list, add or remove declared commands. Without',
     'Faur, edit the files directly; roll back with git. Restart Pi when packages change.',
     '',
-    policySection(model),
+    capabilityLimits(model),
   ].join("\n");
 }
 
@@ -456,7 +435,7 @@ function agentPath(agent) {
 function agentFiles(model, existing) {
   return agentEntries(model).map((agent) => {
     const path = agentPath(agent);
-    const tools = enforcedAgentTools(agent.name, model.policies, agent.tools);
+    const tools = withBaseline(agent.tools);
     return authoredFile(path, "trailing-html", agentBody(agent, tools, model), existing[path]);
   });
 }
@@ -492,6 +471,7 @@ export function managedPaths(model) {
  * @returns {{ files: Array<{ path: string, content: string, action: string, desired?: string }>, warnings: string[], errors: string[] }}
  */
 export function generateProject(model, existingFiles = {}, opts = {}) {
+  model = withBaselineTools(model);
   const existing = isPlainObject(existingFiles) ? existingFiles : {};
   const piPackages = isPlainObject(opts) ? opts.piPackages : undefined;
   const contextFiles = isPlainObject(opts) && Array.isArray(opts.contextFiles) ? opts.contextFiles : [];

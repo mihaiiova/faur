@@ -18,7 +18,7 @@ const KEBAB_CASE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const TOP_LEVEL_KEYS = [
   "schema", "name", "description", "orchestrator",
-  "agents", "skills", "integrations", "policies", "packages", "setup",
+  "agents", "skills", "integrations", "packages", "setup",
 ];
 const ORCHESTRATOR_KEYS = ["name", "description", "prompt", "model", "thinking", "tools"];
 const AGENT_KEYS = [
@@ -34,8 +34,6 @@ const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const RESERVED_ENV_RE = /^(PATH|HOME|SHELL|USER|IFS|ENV|BASH_ENV|PS4|PROMPT_COMMAND|TMPDIR|NODE_OPTIONS|NODE_PATH|NODE_EXTRA_CA_CERTS|NODE_TLS_REJECT_UNAUTHORIZED|SSL_CERT_FILE|SSL_CERT_DIR|LD_[A-Z0-9_]*|DYLD_[A-Z0-9_]*|PI_CODING_AGENT_DIR|PI_PACKAGE_DIR|PI_OFFLINE|PI_NO_UPDATE_CHECK|GIT_SSH_COMMAND|GIT_ASKPASS|SSH_ASKPASS|GIT_CONFIG_[A-Z0-9_]*|PYTHONPATH|PYTHONSTARTUP|PERL5OPT|RUBYOPT|HTTPS?_PROXY|ALL_PROXY|NO_PROXY|FAUR_[A-Z0-9_]*)$/i;
 const MCP_KEYS = ["name", "config", "setup", "secretsFile"];
 const ENV_KEYS = ["name", "secret"];
-const POLICIES_KEYS = ["enforced", "advisory"];
-const ENFORCED_KEYS = ["agent", "tools", "mcp", "hide"];
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -164,6 +162,7 @@ export function validateSystem(doc) {
 
   // ── Top-level ────────────────────────────────────────────────
   checkUnknownKeys(doc, TOP_LEVEL_KEYS, "document", errors);
+  if (doc.policies !== undefined) errors.push("document.policies was removed: move MCP hide rules to integrations.mcp[].config.excludeTools and advisory text to prompts or skills; review agent tool restrictions explicitly, since narrower nonempty allowlists cannot be represented");
   checkSetup(doc.setup, 'document.setup', errors);
 
   if (doc.schema !== 1) {
@@ -380,68 +379,6 @@ export function validateSystem(doc) {
     }
   }
 
-  // ── policies ────────────────────────────────────────────────
-  if (doc.policies !== undefined) {
-    if (!isPlainObject(doc.policies)) {
-      errors.push("document.policies must be an object");
-    } else {
-      checkUnknownKeys(doc.policies, POLICIES_KEYS, "document.policies", errors);
-
-      if (doc.policies.enforced !== undefined) {
-        if (!Array.isArray(doc.policies.enforced)) {
-          errors.push("document.policies.enforced must be an array");
-        } else {
-          doc.policies.enforced.forEach((rule, i) => {
-            const path = `document.policies.enforced[${i}]`;
-            if (!isPlainObject(rule)) {
-              errors.push(`${path} must be an object`);
-              return;
-            }
-            checkUnknownKeys(rule, ENFORCED_KEYS, path, errors);
-
-            const hasAgent = isNonEmptyString(rule.agent);
-            const hasMcp = isNonEmptyString(rule.mcp);
-            if (hasAgent === hasMcp) {
-              errors.push(
-                `${path} must have exactly one of "agent" or "mcp"`,
-              );
-            }
-            if (rule.agent !== undefined) {
-              checkNonEmptyString(rule.agent, `${path}.agent`, errors);
-              checkStringArray(rule.tools, `${path}.tools`, errors);
-            }
-            if (rule.mcp !== undefined) {
-              checkNonEmptyString(rule.mcp, `${path}.mcp`, errors);
-              checkStringArray(rule.hide, `${path}.hide`, errors);
-            }
-          });
-
-          const seenAgents = new Set();
-          const seenMcps = new Set();
-          for (const rule of doc.policies.enforced) {
-            if (!isPlainObject(rule)) continue;
-            if (isNonEmptyString(rule.agent)) {
-              if (seenAgents.has(rule.agent)) {
-                errors.push(`document.policies.enforced has a duplicate agent rule for "${rule.agent}"`);
-              }
-              seenAgents.add(rule.agent);
-            }
-            if (isNonEmptyString(rule.mcp)) {
-              if (seenMcps.has(rule.mcp)) {
-                errors.push(`document.policies.enforced has a duplicate mcp rule for "${rule.mcp}"`);
-              }
-              seenMcps.add(rule.mcp);
-            }
-          }
-        }
-      }
-
-      if (doc.policies.advisory !== undefined) {
-        checkStringArray(doc.policies.advisory, "document.policies.advisory", errors);
-      }
-    }
-  }
-
   // ── References ──────────────────────────────────────────────
   if (doc.agents !== undefined && Array.isArray(doc.agents)) {
     doc.agents.forEach((agent, i) => {
@@ -458,35 +395,10 @@ export function validateSystem(doc) {
     });
   }
 
-  if (
-    doc.policies !== undefined && isPlainObject(doc.policies) &&
-    Array.isArray(doc.policies.enforced)
-  ) {
-    doc.policies.enforced.forEach((rule, i) => {
-      if (!isPlainObject(rule)) return;
-      if (isNonEmptyString(rule.agent) && !agentNames.has(rule.agent)) {
-        const available = [...agentNames].sort().join(", ");
-        errors.push(
-          `document.policies.enforced[${i}].agent references "${rule.agent}" which ` +
-            (available ? `is not a declared agent (declared: ${available})` : "is not a declared agent (no agents declared)"),
-        );
-      }
-      if (isNonEmptyString(rule.mcp) && !mcpNames.has(rule.mcp)) {
-        const available = [...mcpNames].sort().join(", ");
-        errors.push(
-          `document.policies.enforced[${i}].mcp references "${rule.mcp}" which ` +
-            (available ? `is not a declared MCP server (declared: ${available})` : "is not a declared MCP server (no servers declared)"),
-        );
-      }
-    });
-  }
-
   // cli:<name> tool references must name a declared command.
   const cliRefs = [
     ["document.orchestrator.tools", isPlainObject(doc.orchestrator) ? doc.orchestrator.tools : undefined],
     ...(Array.isArray(doc.agents) ? doc.agents.map((a, i) => [`document.agents[${i}].tools`, isPlainObject(a) ? a.tools : undefined]) : []),
-    ...(isPlainObject(doc.policies) && Array.isArray(doc.policies.enforced)
-      ? doc.policies.enforced.map((r, i) => [`document.policies.enforced[${i}].tools`, isPlainObject(r) ? r.tools : undefined]) : []),
   ];
   for (const [path, tools] of cliRefs) {
     if (!Array.isArray(tools)) continue;

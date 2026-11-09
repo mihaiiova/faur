@@ -11,7 +11,7 @@ import { join, resolve, dirname, basename, relative } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { parseSystem } from "./parse.mjs";
-import { withBaselineTools } from "./policy.mjs";
+import { withBaselineTools } from "./tool-selection.mjs";
 import { validateSystem } from "./validate.mjs";
 import { generateProject, managedPaths, intactScaffold } from "./generate.mjs";
 import { indent } from "./diff.mjs";
@@ -268,7 +268,7 @@ function detectAgents(dir) {
     agents.push({
       name: fm.name,
       description: typeof fm.description === "string" ? fm.description : "",
-      tools: Array.isArray(fm.tools) ? fm.tools : [],
+      tools: Array.isArray(fm.tools) ? fm.tools : typeof fm.tools === 'string' ? fm.tools.split(',').map(s => s.trim()).filter(Boolean) : fm.tools === null ? [] : undefined,
       model: typeof fm.model === "string" ? fm.model : "",
       thinking: typeof fm.thinking === "string" ? fm.thinking : "",
       skills: Array.isArray(fm.skills)

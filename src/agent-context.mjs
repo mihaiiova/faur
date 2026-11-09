@@ -6,7 +6,7 @@
  * which tools, MCP servers, commands, skills and specialists an agent has is
  * rendered here from the declarations, so it changes whenever they do.
  */
-import { advisoryText, enforcedAgentTools } from "./policy.mjs";
+import { withBaseline } from "./tool-selection.mjs";
 import { cliEntries, cliRef, cliToolName, formatCommand } from "./cli-tools.mjs";
 import { askingReach, leadTools } from "./asking.mjs";
 import { mcpExposure, mcpToolName } from "./mcp-gen.mjs";
@@ -33,7 +33,7 @@ export function capabilitySection(model, name) {
   const isLead = orchestrator?.name === name;
   const agent = isLead ? orchestrator : list(model?.agents).find((a) => isPlainObject(a) && a.name === name);
   if (!agent) return "";
-  const declared = isLead ? (Array.isArray(agent.tools) ? agent.tools : undefined) : enforcedAgentTools(name, model.policies, agent.tools);
+  const declared = withBaseline(agent.tools);
   const all = !Array.isArray(declared);
   const tools = list(declared);
   const servers = list(model?.integrations?.mcp).filter(isPlainObject);
@@ -56,7 +56,7 @@ export function capabilitySection(model, name) {
   // A whole-server selection reaches what .pi/mcp.json exposes, not every tool.
   const mcp = [...selected].map(([name, picked]) => {
     const s = servers.find((s) => s.name === name);
-    const { hidden, included } = mcpExposure(s ?? { name }, model?.policies);
+    const { hidden, included } = mcpExposure(s ?? { name });
     return { name, s, hidden: picked ? [] : hidden, only: picked ?? included };
   });
   if (mcp.length) {
@@ -113,8 +113,6 @@ function instructionTexts(model) {
   const out = [];
   if (isNonEmptyString(model?.orchestrator?.prompt)) out.push([`orchestrator (${model.orchestrator.name}) prompt`, model.orchestrator.prompt]);
   for (const a of list(model?.agents)) if (isNonEmptyString(a?.prompt)) out.push([`agent ${a.name} prompt`, a.prompt]);
-  const advisory = advisoryText(model?.policies).join("\n");
-  if (advisory) out.push(["advisory policies", advisory]);
   return out;
 }
 
@@ -133,8 +131,7 @@ function capabilityNames(model) {
 }
 
 /**
- * Capabilities removed by a change that the new model's prompts or advisory
- * policies still mention, with the lines that do.
+ * Capabilities removed by a change that the new model's prompts still mention, with the lines that do.
  * @returns {Array<{ removed: string, where: string, lines: string[] }>}
  */
 export function staleMentions(oldModel, newModel) {

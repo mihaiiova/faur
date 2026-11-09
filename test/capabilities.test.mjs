@@ -17,17 +17,16 @@ const MODEL = {
     { name: "local", source: "./vendor/local" },
   ],
   integrations: {
-    mcp: [{ name: "openseo", config: { url: "http://localhost:3002/mcp" } }],
+    mcp: [{ name: "openseo", config: { url: "http://localhost:3002/mcp", excludeTools: ["publish_*"] } }],
   },
-  policies: { enforced: [{ mcp: "openseo", hide: ["publish_*"] }] },
   packages: ["npm:extra@1.0.0"],
 };
 
 test("effectiveCapabilities derives the full intended surface", () => {
   const caps = effectiveCapabilities(MODEL, { piPackages: PI_PACKAGES });
-  assert.deepEqual(caps.orchestratorTools, ["bash", "grep", "read", "subagent"]);
+  assert.deepEqual(caps.orchestratorTools, ["bash", "find", "grep", "ls", "read", "subagent"]);
   assert.equal(caps.orchestratorModel, "m/large");
-  assert.deepEqual(caps.agents, [{ name: "analyst", tools: ["grep", "read"], model: "m/small", thinking: "low", skills: ["draft"] }]);
+  assert.deepEqual(caps.agents, [{ name: "analyst", tools: ["find", "grep", "ls", "read"], model: "m/small", thinking: "low", skills: ["draft"] }]);
   assert.deepEqual(caps.skills, [
     { name: "draft", source: "authored" },
     { name: "packaged", source: "package" },
@@ -42,8 +41,8 @@ test("effectiveCapabilities derives the full intended surface", () => {
   assert.ok(caps.notes.length >= 2, "states subagent + extension-tool enforcement notes");
 });
 
-test('capability preview uses effective policy overrides, not the wider agent declaration', () => {
-  const caps = effectiveCapabilities({ ...MODEL, policies: { enforced: [{ agent: 'analyst', tools: [] }] } }, { piPackages: PI_PACKAGES });
+test('capability preview uses the specialist tool declaration', () => {
+  const caps = effectiveCapabilities({ ...MODEL, agents: [{ ...MODEL.agents[0], tools: [] }] }, { piPackages: PI_PACKAGES });
   assert.deepEqual(caps.agents[0].tools, []);
   assert.equal(caps.maintenance.operationalToolExpansion, false);
 });
@@ -51,7 +50,7 @@ test('capability preview uses effective policy overrides, not the wider agent de
 test("checkCapabilities passes for consistent generated config", () => {
   const caps = effectiveCapabilities(MODEL, { piPackages: PI_PACKAGES });
   const generated = {
-    settings: { defaultProvider: "m", defaultModel: "large", defaultTools: MODEL.orchestrator.tools, packages: caps.packages },
+    settings: { defaultProvider: "m", defaultModel: "large", defaultTools: caps.orchestratorTools, packages: caps.packages },
     mcpJson: { mcpServers: { openseo: { url: "http://localhost:3002/mcp", exposure: "deferred", toolExposure: { "publish_*": "hidden" } } }, autoEnableCodemode: false },
   };
   const { ok, errors } = checkCapabilities(MODEL, generated, { piPackages: PI_PACKAGES });
@@ -69,7 +68,7 @@ test("checkCapabilities passes for consistent generated config", () => {
 test("checkCapabilities flags a hand-added mcp server", () => {
   const caps = effectiveCapabilities(MODEL, { piPackages: PI_PACKAGES });
   const generated = {
-    settings: { defaultProvider: "m", defaultModel: "large", defaultTools: MODEL.orchestrator.tools, packages: caps.packages },
+    settings: { defaultProvider: "m", defaultModel: "large", defaultTools: caps.orchestratorTools, packages: caps.packages },
     mcpJson: { mcpServers: { openseo: {}, ghost: {} } },
   };
   const { ok, errors } = checkCapabilities(MODEL, generated, { piPackages: PI_PACKAGES });
@@ -91,7 +90,7 @@ test("checkCapabilities flags a wrong defaultTools", () => {
 test("checkCapabilities flags a primary-session model that drifted from system.yaml", () => {
   const caps = effectiveCapabilities(MODEL, { piPackages: PI_PACKAGES });
   const generated = {
-    settings: { defaultProvider: "m", defaultModel: "other", defaultTools: MODEL.orchestrator.tools, packages: caps.packages },
+    settings: { defaultProvider: "m", defaultModel: "other", defaultTools: caps.orchestratorTools, packages: caps.packages },
     mcpJson: { mcpServers: { openseo: { excludeTools: ["publish_*"] } } },
   };
   const { ok, errors } = checkCapabilities(MODEL, generated, { piPackages: PI_PACKAGES });

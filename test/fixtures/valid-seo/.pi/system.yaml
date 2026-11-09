@@ -8,6 +8,7 @@ orchestrator:
   description: "Primary interactive agent that coordinates the system"
   prompt: |
     You coordinate the SEO system. Delegate analysis to the analyst, …
+    Publishing requires human confirmation; draft to data/articles/ and the user publishes.
   model: provider-a/model-large
   thinking: medium
   tools: [ read, grep, find, ls, bash, edit, write, subagent ]
@@ -30,16 +31,6 @@ skills:
 integrations:
   mcp:
     - name: openseo
-      config: { url: "http://localhost:3002/mcp" }
+      config: { url: "http://localhost:3002/mcp", excludeTools: ["publish_*", "delete_*"] }
   env:
     - { name: OPENSEO_URL, secret: false }
-
-policies:
-  enforced:
-    - agent: seo-analyst
-      tools: [ read, grep, find, ls ]
-    - mcp: openseo
-      hide: [ "publish_*", "delete_*" ]
-  advisory:
-    - "Publishing requires human confirmation: the workflow drafts to
-      data/articles/ and the user publishes."

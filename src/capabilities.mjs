@@ -11,7 +11,7 @@
  * at runtime and are not assertable without a running process — the manifest
  * states this instead of claiming they are absent.
  */
-import { enforcedAgentTools } from "./policy.mjs";
+import { withBaseline } from "./tool-selection.mjs";
 import { runtimePackages, runtimeNeeds } from "./deps.mjs";
 import { declaredPackages, skillSourceKind } from "./skill-sources.mjs";
 import { splitModelRef } from "./models.mjs";
@@ -49,10 +49,10 @@ export function effectiveCapabilities(model, opts = {}) {
     schema: model?.schema,
     name: model?.name,
     orchestratorModel: orchestrator.model,
-    orchestratorTools: sortUnique(orchestrator.tools),
+    orchestratorTools: sortUnique(withBaseline(orchestrator.tools)),
     agents: (Array.isArray(model.agents) ? model.agents : []).map((agent) => ({
       name: agent.name,
-      tools: sortUnique(enforcedAgentTools(agent.name, model.policies, agent.tools)),
+      tools: sortUnique(withBaseline(agent.tools)),
       model: agent.model,
       ...(typeof agent.thinking === "string" ? { thinking: agent.thinking } : {}),
       skills: sortUnique(agent.skills),
@@ -68,10 +68,10 @@ export function effectiveCapabilities(model, opts = {}) {
       name: entry.name,
       command: [entry.command, ...(entry.args ?? [])].join(" "),
       approve: entry.approve !== false,
-      agents: cliAgents(model, entry.name, (agent) => enforcedAgentTools(agent.name, model.policies, agent.tools)),
+      agents: cliAgents(model, entry.name, (agent) => withBaseline(agent.tools)),
     })),
     // How each server's tools reach agents: exposure and per-tool overrides.
-    mcpServers: Object.entries(mcpFromIntegrations(mcpList, model?.policies)).map(([name, server]) => ({
+    mcpServers: Object.entries(mcpFromIntegrations(mcpList)).map(([name, server]) => ({
       name,
       exposure: server.exposure,
       ...(server.toolExposure ? { toolExposure: server.toolExposure } : {}),

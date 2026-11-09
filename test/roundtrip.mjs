@@ -20,7 +20,7 @@ const DETECTED = {
   skills: [{ name: "house-style", description: "Write plainly", source: "./.pi/skills/house-style" }],
   agents: [
     { name: "scout", description: "Read-only discovery", tools: ["read", "grep", "find", "ls"], model: "provider-b/model-small", skills: ["house-style"], prompt: "Investigate.\n" },
-    { name: "worker", description: "Single writer", tools: ["read", "bash", "edit", "write"], model: "provider-a/model-medium", thinking: "high", prompt: "Implement.\n" },
+    { name: "worker", description: "Single writer", tools: ["read", "ls", "find", "grep", "bash", "edit", "write"], model: "provider-a/model-medium", thinking: "high", prompt: "Implement.\n" },
     { name: "reviewer", description: "Read-only review", tools: ["read", "grep", "find", "ls", "bash"], model: "provider-b/model-small", prompt: "Review.\n" },
     { name: "oracle", description: "Hard reasoning", tools: ["read", "grep", "find", "ls"], model: "provider-a/model-large", prompt: "Reason.\n" },
   ],
@@ -31,7 +31,8 @@ const DETECTED = {
 const PINS = ["npm:pi-subagents@0.83.1"];
 
 test("round-trip: import → generate preserves each agent's model, skills and MCP", () => {
-  const { system } = importSystem(SETTINGS, DETECTED);
+  const { system, report } = importSystem(SETTINGS, DETECTED);
+  assert.deepEqual(report.blocked, []);
   const { ok, errors } = validateSystem(system);
   assert.equal(ok, true, `imported system must validate: ${errors.join("; ")}`);
 

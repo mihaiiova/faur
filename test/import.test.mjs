@@ -17,7 +17,7 @@ const DETECTED = {
   skills: [{ name: "house-style", description: "Write plainly", source: "./.pi/skills/house-style" }],
   agents: [
     { name: "scout", description: "Read-only discovery", tools: ["read", "grep", "find", "ls"], model: "provider-b/model-small", thinking: "low", skills: ["house-style"], prompt: "Investigate.\n" },
-    { name: "worker", description: "Single writer", tools: ["read", "bash", "edit", "write"], model: "provider-a/model-medium", prompt: "Implement.\n" },
+    { name: "worker", description: "Single writer", tools: ["read", "ls", "find", "grep", "bash", "edit", "write"], model: "provider-a/model-medium", prompt: "Implement.\n" },
   ],
   mcpServers: { cloudflare: { command: "npx", args: ["cloudflare-mcp", "--stdio"] } },
 };
@@ -39,7 +39,7 @@ test('importSystem preserves an explicitly empty defaultTools allowlist', () => 
 
 test('importSystem separates intact generated specialist guidance and blocks ambiguous generated files', () => {
   const marker = "## What you can use\n\nGenerated from this system's declarations; it changes when they do. Use only what is listed here.";
-  const agent = { name: 'scout', tools: ['read'], model: 'p/m', prompt: `Authored instructions.\n\n${marker}\n\n- read`, generatedMarker: true, intactGenerated: true };
+  const agent = { name: 'scout', tools: ['read', 'ls', 'find', 'grep'], model: 'p/m', prompt: `Authored instructions.\n\n${marker}\n\n- read`, generatedMarker: true, intactGenerated: true };
   const clean = importSystem(SETTINGS, { agents: [agent] });
   assert.equal(clean.system.agents[0].prompt, 'Authored instructions.');
   assert.match(clean.report.flagged[0].reason, /not imported as authored prompt/);
@@ -120,4 +120,15 @@ test("importSystem output is a valid schema-v1 document", () => {
   const { ok, errors } = validateSystem(system);
   assert.deepEqual(errors, []);
   assert.equal(ok, true);
+});
+
+test('import refuses native exact or omitted lists that would widen access', () => {
+  for (const tools of [undefined, ['read']]) {
+    const result = importSystem({ ...SETTINGS, defaultTools: tools }, {});
+    assert.ok(result.report.blocked.some(item => item.key === 'defaultTools'));
+  }
+  const narrow = importSystem(SETTINGS, { agents: [{ name: 'reader', tools: ['read'], model: 'p/m' }] });
+  assert.ok(narrow.report.blocked.some(item => item.key === 'agents.reader.tools'));
+  const empty = importSystem({ ...SETTINGS, defaultTools: [] }, { agents: [{ name: 'empty', tools: [], model: 'p/m' }] });
+  assert.deepEqual(empty.report.blocked, []);
 });

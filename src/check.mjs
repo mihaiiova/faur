@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, readdirSync, realpathSync } from 'node:fs';
-import { withBaselineTools } from './policy.mjs';
+import { withBaselineTools } from './tool-selection.mjs';
 import { LEGACY_KEYS } from './changes.mjs';
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
@@ -15,7 +15,7 @@ import { configurationAdvisories } from './advisories.mjs';
 import { cliEntries } from './cli-tools.mjs';
 import { probeClis } from './discover.mjs';
 import { skillSourceKind } from './skill-sources.mjs';
-import { enforcedAgentTools } from './policy.mjs';
+import { withBaseline } from './tool-selection.mjs';
 import { mcpToolName } from './mcp-gen.mjs';
 import { leadTools } from './asking.mjs';
 import { envNames } from './runtime.mjs';
@@ -53,17 +53,17 @@ export function hostConflicts(root, model, { agentDir = process.env.PI_CODING_AG
 }
 
 /** Check model validity, generated configuration and launch prerequisites. */
-export function checkProject(root, { registeredTools, mcpTools, env = process.env, hostAgentDir, mcpCommand, verifyCodemode = true } = {}) {
+export function checkProject(root, { registeredTools, mcpTools, env = process.env, hostAgentDir, mcpCommand, verifyCodemode = true, runSetupChecks = true } = {}) {
   const raw = loadYaml().parse(readText(root, '.pi/system.yaml') ?? '');
   const validation = validateSystem(raw).errors;
   const legacy = LEGACY_KEYS.filter(key => raw?.[key] !== undefined);
   if (legacy.length) validation.push(`${legacy.join(' and ')} ${legacy.length > 1 ? 'are' : 'is'} no longer supported: run /faur to migrate; it proposes skills that carry these procedures and removes the old declarations in one approved change`);
-  if (validation.length) return { ok: false, validation, consistency: null, launch: null, advisories: [] };
+  if (validation.length) return { ok: false, validation, consistency: null, launch: null, advisories: [], ...(!runSetupChecks ? { setupChecks: 'not verified' } : {}) };
   const doc = withBaselineTools(raw);
   const piPackages = readJson(root, '.pi/settings.json').packages ?? [];
   const consistency = checkCapabilities(doc, { settings: readJson(root, '.pi/settings.json'), mcpJson: readText(root, '.pi/mcp.json') === null ? {} : readJson(root, '.pi/mcp.json') }, { piPackages }).errors;
   const launch = launchCheck(root, doc, { registeredTools, mcpTools, verifyCodemode }).problems.map(p => `${p.agent}: ${p.problem}`);
-  for (const step of unmetSetup(root, doc)) launch.push(`${step.owner}: setup ${step.description}; fix: ${step.install}${step.needsRoot ? ' (run manually; needs root)' : ''}`);
+  if (runSetupChecks) for (const step of unmetSetup(root, doc)) launch.push(`${step.owner}: setup ${step.description}; fix: ${step.install}${step.needsRoot ? ' (run manually; needs root)' : ''}`);
   for (const path of new Set(integrationSecrets(doc))) {
     const problem = secretFileProblem(root, path);
     if (problem) launch.push(`Integration secretsFile ${path}: ${problem}`);
@@ -73,7 +73,7 @@ export function checkProject(root, { registeredTools, mcpTools, env = process.en
     if (!env[name]) launch.push(`integrations.env ${name}: not set in this environment; export it, or load .env with direnv, before starting the agent`);
   }
   launch.push(...hostConflicts(root, doc, { ...(hostAgentDir ? { agentDir: hostAgentDir } : {}), mcpCommand }));
-  return { ok: !consistency.length && !launch.length, validation, consistency, launch, advisories: configurationAdvisories(doc) };
+  return { ok: consistency.length || launch.length ? false : runSetupChecks ? true : null, validation, consistency, launch, advisories: configurationAdvisories(doc), ...(!runSetupChecks ? { setupChecks: 'not verified' } : {}) };
 }
 
 /**
@@ -135,7 +135,7 @@ export function checkAgent(root, options = {}) {
   const commands = new Map(cliEntries(model).map(c => [c.name, c]));
   const skills = new Map((model.skills ?? []).map(s => [s.name, s]));
   for (const agent of [model.orchestrator, ...(model.agents ?? [])]) {
-    const tools = agent === model.orchestrator ? (agent.tools ?? cliEntries(model).map(c => `cli:${c.name}`)) : enforcedAgentTools(agent.name, model.policies, agent.tools);
+    const tools = withBaseline(agent.tools);
     for (const name of tools ?? []) {
       if (name.startsWith('mcp:')) {
         const [server, tool] = name.slice(4).split('/');

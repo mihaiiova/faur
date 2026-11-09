@@ -1,4 +1,4 @@
-<!-- faur:generated v1 sha256=ab4a6561e05219aeaffd25ad2ddc3acd1d8177dc9d78b4cd0483629dd4aea5ec -->
+<!-- faur:generated v1 sha256=a86342e0e92c53df72d425d732c9337e8fb9712b672110162b8d81956c02eb5b -->
 # seo-agent-system
 
 SEO analysis + article drafting with specialist subagents
@@ -23,7 +23,7 @@ that continue briefly after Pi exits and may keep output pipes open. Callers
 should allow extra time before assuming the output stream has closed.
 
 Authenticate with `/login`, or export the provider-specific key (for
-example `DEEPSEEK_API_KEY`). See the policy section below for which
+example `DEEPSEEK_API_KEY`). See the capability section below for which
 capabilities are enforced vs advisory.
 
 ## Maintain
@@ -35,12 +35,9 @@ turn ends), `/faur check` to verify the agent, `/faur status` to summarize
 it and `/faur permissions` to list, add or remove declared commands. Without
 Faur, edit the files directly; roll back with git. Restart Pi when packages change.
 
-## Policy
+## Capabilities and limits
 
-### Enforced by Pi's tool layer
-
-None declared.
-
-### Advisory (guidance — not enforced)
-
-None declared.
+Lead defaultTools controls built-in tools; independently registered extension tools may remain active, and MCP exposure is configured separately.
+Specialist tool lists are enforced by pi-subagents.
+Plain Pi inherits global configuration. Tool lists are not OS isolation: bash and shell-like commands can reach what the user account can.
+Agent instructions are advisory, not enforced.

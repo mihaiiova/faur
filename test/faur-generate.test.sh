@@ -127,13 +127,13 @@ node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf-8"))' \
 grep -q '"openseo"' "$vs/.pi/mcp.json" || fail "valid-seo mcp.json missing openseo"
 grep -q '"publish_\*": "hidden"' "$vs/.pi/mcp.json" || fail "valid-seo hidden tools missing from toolExposure"
 grep -q 'publish_\*' "$vs/.pi/mcp.json" || fail "valid-seo hide publish_* missing"
-grep -q "### Enforced by Pi's tool layer" "$vs/README.md" || fail "README missing enforced marker"
-grep -q 'An agent with `bash` or a shell-like command can still reach' "$vs/README.md" || fail "README omits what tool-layer enforcement does not cover"
+grep -q "Pi built-in MCP enforces server tool hiding" "$vs/README.md" || fail "README missing MCP enforcement"
+grep -q 'bash and shell-like commands can reach' "$vs/README.md" || fail "README omits what tool-layer enforcement does not cover"
 [[ ! -e "$vs/run" ]] || fail "unexpected generated run launcher"
 grep -qi 'cannot be bypassed\|credentials are not inherited' "$vs/README.md" && fail "generated text overstates enforcement"
-grep -q '### Advisory (guidance — not enforced)' "$vs/README.md" || fail "README missing advisory marker"
+grep -q 'Agent instructions are advisory, not enforced' "$vs/README.md" || fail "README missing advisory marker"
 rm -rf "$vs"
-pass "faur generate materializes MCP config and enforced/advisory policy"
+pass "faur generate materializes MCP exclusions and explains enforcement limits"
 
 # ── e2e smoke (pi-gated) ─────────────────────────────────────────
 if [[ "${RUN_FAUR_LIVE_TESTS:-0}" == 1 ]] && command -v pi >/dev/null 2>&1; then
@@ -193,11 +193,7 @@ name: mcp-test-system
 integrations:
   mcp:
     - name: openseo
-      config: { url: "http://localhost:3002/mcp" }
-policies:
-  enforced:
-    - mcp: openseo
-      hide: ["publish_*", "delete_*"]
+      config: { url: "http://localhost:3002/mcp", excludeTools: ["publish_*", "delete_*"] }
 YAML
   node "$faur" generate "$mci" >/dev/null
   node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf-8"))' \

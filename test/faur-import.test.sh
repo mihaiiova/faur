@@ -27,7 +27,7 @@ cat > "$work/.pi/agents/scout.md" <<'MD'
 ---
 name: scout
 description: Read-only discovery
-tools: read, grep
+tools: read, grep, find, ls
 model: provider-b/model-small
 thinking: low
 skills: house-style
@@ -63,6 +63,15 @@ if node "$faur" import "$work" >/dev/null 2>&1; then
   fail "second import should refuse (system.yaml already exists)"
 fi
 pass "faur import refuses to overwrite an existing system.yaml"
+
+rm "$work/.pi/system.yaml"
+sed -i '/^tools: /d' "$work/.pi/agents/scout.md"
+if node "$faur" import "$work" >"$work/import.log" 2>"$work/import.err"; then
+  fail "omitted specialist tools must block import"
+fi
+[[ ! -f "$work/.pi/system.yaml" ]] || fail "blocked import wrote system.yaml"
+grep -q 'agents.scout.tools' "$work/import.err" || fail "missing omitted specialist explanation"
+pass "faur import refuses omitted specialist tools without changing access"
 
 # ── clean-environment (deterministic): pinned packages ─────────
 gen="$(mktemp -d)"

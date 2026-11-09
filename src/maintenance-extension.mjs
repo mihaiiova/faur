@@ -95,11 +95,19 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
           // The model cannot see the approval dialog; say whether a proposal still waits.
           value.pendingProposal = pending && !review ? { applied: false, note: 'Proposed in this /faur session and not applied: the person has not chosen Apply.' } : null;
           value.launchCheck = launchCheck(root, value.parsedModel, loaded());
+          value.currentChecks = checkProject(root, { ...loaded(), runSetupChecks: false });
+          // Cached capability evidence is historical, not a fresh check. Do not
+          // send server diagnostics or other potentially sensitive details here.
+          try {
+            const last = readJson(root, '.faur/check.json');
+            value.lastCapabilityCheck = { timestamp: last.timestamp, capabilities: (last.capabilities ?? []).map(({ agent, name, provider, status }) => ({ agent, name, provider, status })) };
+          } catch { value.lastCapabilityCheck = null; }
           value.schemaReference = readFileSync(new URL('../skills/faur/schema.md', import.meta.url), 'utf8');
           value.availableModels = (ctx.modelRegistry?.getAvailable?.() ?? []).map(m => ({ provider: m.provider, id: m.id, cost: m.cost }));
           // Execution evidence is deliberately summary-only: never include tool
           // outputs, prompts, credentials or unrelated session content.
           value.executionEvidence = (ctx.sessionManager?.getBranch?.() ?? []).filter(e => e.type === 'message' && e.message?.role === 'toolResult').map(e => ({ tool: e.message.toolName, failed: e.message.isError === true }));
+          value = redactForModel(root, value);
         } else if (params.action === 'discover') {
           const query = String(params.query ?? '').trim();
           const clis = [...new Set(String(params.clis ?? '').trim().split(/\s+/).filter(Boolean))];
