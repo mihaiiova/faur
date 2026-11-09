@@ -21,7 +21,8 @@ the issues.
   conversations (v0.35.0); #75 native skills instead of documents and
   workflows, MCP drift and env fixes, and `/faur` across `/reload` (v0.36.0);
   no implicit codemode in the tool baseline (v0.36.1); Faur drafts and writes
-  agents' procedures as skills, and migrates `documents`/`workflows` (v0.37.0).
+  agents' procedures as skills, and migrates `documents`/`workflows` (v0.37.0);
+  #74 tool selection and #76 conversational diagnostics (v0.38.0).
 - **Versioning:** below 1.0. Pre-1.0 releases may break projects, which are
   regenerated.
 - **Direction change (2026-11-02):** Faur is only the maker. Generated
@@ -49,7 +50,7 @@ the issues.
      integrations).
 - **Simplification epic #73 (2026-11-06):** #75 is done (native skills
   replace document and workflow declarations). #74 (tool access) and #76
-  (diagnostics) are in review; #74's design was approved before implementation.
+  (diagnostics) shipped in v0.38.0.
 - **Known limitations (current release):**
   - `check-agent --connect` uses a separate project-local Pi home and saves
     trust there; this does not verify the user's plain-Pi configuration.
