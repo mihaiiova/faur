@@ -9,6 +9,8 @@
  * filesystem or CLI work.
  */
 
+import { BASELINE_TOOLS } from './tool-selection.mjs';
+
 const DEFAULT_TOOLS = ["read", "grep", "find", "ls", "bash", "edit", "write", "subagent"];
 const KNOWN_SETTINGS_KEYS = new Set([
   "defaultProvider", "defaultModel", "defaultThinkingLevel",
@@ -34,6 +36,17 @@ export function importSystem(settings, detected) {
   const settingsObj = isPlainObject(settings) ? settings : {};
   const flagged = [];
   const blocked = [];
+
+  // Native omitted lists have Pi's defaults, not Faur's browsing baseline.
+  // Import must not turn a narrower exact list into a wider generated one.
+  const checkTools = (tools, key) => {
+    if (!Array.isArray(tools)) {
+      blocked.push({ key, reason: 'omitted native tool list uses Pi defaults, which Faur cannot represent without changing access; set an explicit list containing the browsing baseline or an empty list' });
+    } else if (tools.length && BASELINE_TOOLS.some(tool => !tools.includes(tool))) {
+      blocked.push({ key, reason: `native tool list lacks part of the Faur browsing baseline (${BASELINE_TOOLS.join(', ')}); importing would widen access` });
+    }
+  };
+  checkTools(settingsObj.defaultTools, 'defaultTools');
 
   // Orchestrator: the primary session, derived from settings defaults.
   const orchestratorModel =
@@ -68,6 +81,7 @@ export function importSystem(settings, detected) {
   const agents = [];
   for (const agent of Array.isArray(detectedObj.agents) ? detectedObj.agents : []) {
     if (!isPlainObject(agent) || !isNonEmptyString(agent.name)) continue;
+    checkTools(agent.tools, `agents.${agent.name}.tools`);
     const entry = {
       name: agent.name,
       description: isNonEmptyString(agent.description) ? agent.description : "",

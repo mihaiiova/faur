@@ -58,7 +58,7 @@ export function readerFileWarning(entry) {
 export function cliAgents(model, name, enforcedTools) {
   const out = [];
   const orchestrator = model?.orchestrator;
-  if (orchestrator && (!Array.isArray(orchestrator.tools) || orchestrator.tools.includes(`cli:${name}`))) out.push(orchestrator.name);
+  if (orchestrator && Array.isArray(orchestrator.tools) && orchestrator.tools.includes(`cli:${name}`)) out.push(orchestrator.name);
   for (const agent of Array.isArray(model?.agents) ? model.agents : []) {
     const tools = enforcedTools ? enforcedTools(agent) : agent.tools;
     if (Array.isArray(tools) && tools.includes(`cli:${name}`)) out.push(agent.name);
@@ -108,10 +108,7 @@ export function checkShape({ name, command, args }) {
 }
 
 /**
- * Change operations that declare a command and give it to agents. An
- * orchestrator whose tools are omitted already has every command. A subagent's
- * tools list and any enforced policy rule for it (its capability ceiling) are
- * both updated, so they stay consistent.
+ * Change operations that declare a command and give it to agents. Each agent must explicitly list its command.
  */
 export function grantOps(model, entry, agentNames) {
   const ref = `cli:${entry.name}`;
@@ -131,21 +128,11 @@ function toolOps(model, agentNames, edit) {
   const ops = [];
   const names = new Set(agentNames);
   const orchestrator = model?.orchestrator;
-  if (orchestrator && names.has(orchestrator.name) && Array.isArray(orchestrator.tools)) {
-    const tools = edit(orchestrator.tools);
-    if (tools !== orchestrator.tools && JSON.stringify(tools) !== JSON.stringify(orchestrator.tools)) ops.push({ op: 'set', target: 'orchestrator', value: { ...orchestrator, tools } });
+  if (orchestrator && names.has(orchestrator.name)) {
+    const tools = edit(orchestrator.tools ?? []);
+    if ((Array.isArray(orchestrator.tools) || tools.length > 0) && JSON.stringify(tools) !== JSON.stringify(orchestrator.tools)) ops.push({ op: 'set', target: 'orchestrator', value: { ...orchestrator, tools } });
   }
-  const enforced = Array.isArray(model?.policies?.enforced) ? model.policies.enforced : [];
-  let policiesChanged = false;
-  const rules = enforced.map((rule) => {
-    if (rule && names.has(rule.agent) && Array.isArray(rule.tools)) {
-      const tools = edit(rule.tools);
-      if (JSON.stringify(tools) !== JSON.stringify(rule.tools)) { policiesChanged = true; return { ...rule, tools }; }
-    }
-    return rule;
-  });
-  if (policiesChanged) ops.push({ op: 'set', target: 'policies', value: { ...model.policies, enforced: rules } });
-  // A subagent with no tools list has no tools at all, so a grant starts one.
+  // A grant to an omitted list adds the command to the browsing baseline.
   for (const agent of Array.isArray(model?.agents) ? model.agents : []) {
     if (!names.has(agent.name)) continue;
     const before = Array.isArray(agent.tools) ? agent.tools : [];

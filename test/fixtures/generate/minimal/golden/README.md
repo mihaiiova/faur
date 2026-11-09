@@ -1,4 +1,4 @@
-<!-- faur:generated v1 sha256=e7e74b880bd951552efe898515118781be69a2c28873178260d8816411b8da70 -->
+<!-- faur:generated v1 sha256=4ecf2abc946d7a5d3960d76d971648d036a457ec5fbb583622e42015ac8855cd -->
 # notes-helper
 
 Answers questions about the notes in this folder
@@ -19,7 +19,7 @@ pi --approve -p "..."       # headless one-shot
 ```
 
 Authenticate with `/login`, or export the provider-specific key (for
-example `DEEPSEEK_API_KEY`). See the policy section below for which
+example `DEEPSEEK_API_KEY`). See the capability section below for which
 capabilities are enforced vs advisory.
 
 ## Maintain
@@ -31,12 +31,8 @@ turn ends), `/faur check` to verify the agent, `/faur status` to summarize
 it and `/faur permissions` to list, add or remove declared commands. Without
 Faur, edit the files directly; roll back with git. Restart Pi when packages change.
 
-## Policy
+## Capabilities and limits
 
-### Enforced by Pi's tool layer
-
-None declared.
-
-### Advisory (guidance — not enforced)
-
-None declared.
+Lead defaultTools controls built-in tools; independently registered extension tools may remain active, and MCP exposure is configured separately.
+Plain Pi inherits global configuration. Tool lists are not OS isolation: bash and shell-like commands can reach what the user account can.
+Agent instructions are advisory, not enforced.

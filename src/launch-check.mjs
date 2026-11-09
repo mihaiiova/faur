@@ -12,7 +12,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
-import { enforcedAgentTools } from './policy.mjs';
+import { withBaseline } from './tool-selection.mjs';
 import { skillSourceKind } from './skill-sources.mjs';
 import { cliEntries, cliRef } from './cli-tools.mjs';
 import { probeClis } from './discover.mjs';
@@ -62,7 +62,7 @@ export function launchCheck(root, model, { registeredTools, mcpTools, probe, ver
     }
   };
   if (model?.orchestrator) {
-    const tools = Array.isArray(model.orchestrator.tools) ? model.orchestrator.tools : cliEntries(model).map((c) => `cli:${c.name}`);
+    const tools = withBaseline(model.orchestrator.tools);
     checkCommands(model.orchestrator.name, tools);
     for (const tool of tools) {
       if ((tool !== 'codemode' || verifyCodemode) && !BUILTIN.has(tool) && !cliRef(tool) && tool !== 'mcp' && !tool.startsWith('mcp:') && registered && !registered.has(tool)) {
@@ -72,10 +72,9 @@ export function launchCheck(root, model, { registeredTools, mcpTools, probe, ver
   }
   for (const agent of Array.isArray(model?.agents) ? model.agents : []) {
     const report = (problem) => problems.push({ agent: agent.name, problem });
-    const tools = enforcedAgentTools(agent.name, model.policies, agent.tools);
+    const tools = withBaseline(agent.tools);
     checkCommands(agent.name, tools);
-    if (!Array.isArray(tools)) report('foreground extension loading is not verified for inherited tools; provide extension paths in the native agent tools list where needed');
-    for (const tool of Array.isArray(tools) ? tools : []) {
+    for (const tool of tools) {
       if (BUILTIN.has(tool)) continue;
       if (cliRef(tool)) {
         report(`${tool}: foreground extension loading is not verified; the native agent tools list must include the providing extension path`);
@@ -91,8 +90,8 @@ export function launchCheck(root, model, { registeredTools, mcpTools, probe, ver
         const wanted = name && offered.find((t) => t.name === mcpToolName(server, name));
         if (!offered.length) report(`${tool}: "${server}" has not connected or offers no tools; /mcp shows why`);
         else if (name && !wanted) report(`${tool}: "${server}" does not offer "${name}"`);
-        else if (name && wanted.exposure === 'hidden') report(`${tool}: "${name}" is hidden by includeTools, excludeTools or a hide policy`);
-        else if (!name && !usable.length) report(`${tool}: every tool of "${server}" is hidden by includeTools, excludeTools or a hide policy`);
+        else if (name && wanted.exposure === 'hidden') report(`${tool}: "${name}" is hidden by includeTools or excludeTools`);
+        else if (!name && !usable.length) report(`${tool}: every tool of "${server}" is hidden by includeTools or excludeTools`);
         continue;
       }
       if ((tool !== 'codemode' || verifyCodemode) && registered && !registered.has(tool)) report(`${tool}: no loaded extension registers this tool`);

@@ -1,11 +1,11 @@
 /** Non-blocking configuration observations; text matches are only heuristics. */
 import { cliEntries, cliAgents, commandShape, readerFileWarning } from './cli-tools.mjs';
-import { enforcedAgentTools } from './policy.mjs';
+import { withBaseline } from './tool-selection.mjs';
 
 export function configurationAdvisories(model) {
   const out = [];
   const commands = cliEntries(model);
-  const effective = a => enforcedAgentTools(a.name, model.policies, a.tools);
+  const effective = a => withBaseline(a.tools);
   const seen = new Map();
   for (const c of commands) {
     if (!cliAgents(model, c.name, effective).length) out.push(`Command ${c.name} is not available to any agent (it may be intentionally predeclared).`);

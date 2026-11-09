@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { generateProject } from '../src/generate.mjs';
 
 const repo = resolve(import.meta.dirname, '..');
 const sdkModule = async () => {
@@ -151,9 +152,49 @@ test('deleting the design record leaves real Pi unchanged and import reports pre
   assert.equal(readFileSync(join(root, '.pi/APPEND_SYSTEM.md'), 'utf8'), promptBefore, 'import preserves the native prompt');
   assert.deepEqual(await launch(), before, 'import does not alter real Pi behavior');
   const { planChange, applyChange } = await import('../src/maintenance.mjs');
-  applyChange(root, planChange(root, [{ op: 'set', target: 'policies', value: {} }]), true);
+  applyChange(root, planChange(root, [{ op: 'set', target: 'packages', value: [] }]), true);
   const revised = await launch();
   assert.match(revised.prompt, /Cite full file paths and keep this manual instruction/, 'later revision retains the imported manual prompt');
+});
+
+test('real Pi distinguishes omitted, empty and explicit built-in tool selections', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'faur-sdk-tool-selection-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, '.pi'));
+  const agentDir = join(root, 'home');
+  mkdirSync(agentDir);
+  const sdk = await sdkModule();
+  const settingsPath = join(root, '.pi/settings.json');
+  async function activeTools(settings) {
+    writeFileSync(settingsPath, JSON.stringify(settings));
+    const settingsManager = sdk.SettingsManager.create(root, agentDir, { projectTrusted: true });
+    const loader = new sdk.DefaultResourceLoader({ cwd: root, agentDir, settingsManager, noContextFiles: true });
+    await loader.reload();
+    const { session } = await sdk.createAgentSession({ cwd: root, agentDir, resourceLoader: loader, settingsManager, sessionManager: sdk.SessionManager.inMemory(root) });
+    try { return session.getActiveToolNames(); } finally { session.dispose(); }
+  }
+  assert.deepEqual(await activeTools({}), ['read', 'bash', 'edit', 'write']);
+  assert.deepEqual(await activeTools({ defaultTools: [] }), []);
+  assert.deepEqual(await activeTools({ defaultTools: ['read', 'ls', 'find', 'grep'] }), ['read', 'ls', 'find', 'grep']);
+});
+
+test('an active extension tool can remain available with empty defaultTools in real Pi', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'faur-sdk-active-extension-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, '.pi'));
+  const agentDir = join(root, 'home');
+  mkdirSync(agentDir);
+  writeFileSync(join(root, '.pi/settings.json'), JSON.stringify({ defaultTools: [] }));
+  const sdk = await sdkModule();
+  const settingsManager = sdk.SettingsManager.create(root, agentDir, { projectTrusted: true });
+  const extension = pi => pi.registerTool({ name: 'external_probe', label: 'Probe', description: 'An active extension tool', parameters: { type: 'object', properties: {} }, async execute() { return { content: [], details: {} }; } });
+  const loader = new sdk.DefaultResourceLoader({ cwd: root, agentDir, settingsManager, noContextFiles: true, extensionFactories: [extension] });
+  await loader.reload();
+  const { session } = await sdk.createAgentSession({ cwd: root, agentDir, resourceLoader: loader, settingsManager, sessionManager: sdk.SessionManager.inMemory(root) });
+  try {
+    await session.bindExtensions({ onError: error => { throw new Error(JSON.stringify(error)); } });
+    assert.deepEqual(session.getActiveToolNames(), ['external_probe']);
+  } finally { session.dispose(); }
 });
 
 test('import and revision never expand an empty native tool allowlist in real Pi', async t => {
@@ -184,7 +225,7 @@ test('import and revision never expand an empty native tool allowlist in real Pi
   const { loadYaml } = await import('../src/yaml-loader.mjs');
   assert.deepEqual(loadYaml().parse(readFileSync(join(root, '.pi/system.yaml'), 'utf8')).orchestrator.tools, []);
   const { planChange, applyChange } = await import('../src/maintenance.mjs');
-  applyChange(root, planChange(root, [{ op: 'set', target: 'policies', value: {} }]), true);
+  applyChange(root, planChange(root, [{ op: 'set', target: 'packages', value: [] }]), true);
   assert.deepEqual(JSON.parse(readFileSync(settingsPath, 'utf8')).defaultTools, []);
   assert.deepEqual(await activeTools(), before, 'revision does not expand real Pi tools');
 });
@@ -288,7 +329,7 @@ test('native prompt and settings edits survive adoption and revision in real Pi'
   try { assert.deepEqual(session.getActiveToolNames(), ['read', 'ls', 'find', 'grep', 'bash', 'codemode']); }
   finally { session.dispose(); }
   applyChange(root, planSettingsAdoption(root), true);
-  applyChange(root, planChange(root, [{ op: 'set', target: 'policies', value: {} }]), true);
+  applyChange(root, planChange(root, [{ op: 'set', target: 'packages', value: [] }]), true);
   const newSettings = sdk.SettingsManager.create(root, agentDir, { projectTrusted: true });
   const newLoader = new sdk.DefaultResourceLoader({ cwd: root, agentDir, settingsManager: newSettings, noContextFiles: true, extensionFactories: [sdk.createCodemodeExtension()] });
   await newLoader.reload();
@@ -324,7 +365,7 @@ test('native prompt and settings edits survive adoption and revision in real Pi'
   writeFileSync(settingsPath, JSON.stringify(mixed, null, 2) + '\n');
   applyChange(root, planSettingsReconciliation(root, ['tools']), true);
   assert.notEqual(JSON.parse(readFileSync(settingsPath, 'utf8')).defaultModel, 'manual-model');
-  applyChange(root, planChange(root, [{ op: 'set', target: 'policies', value: {} }]), true);
+  applyChange(root, planChange(root, [{ op: 'set', target: 'packages', value: [] }]), true);
   const mergedSettings = sdk.SettingsManager.create(root, agentDir, { projectTrusted: true });
   const mergedLoader = new sdk.DefaultResourceLoader({ cwd: root, agentDir, settingsManager: mergedSettings, noContextFiles: true, extensionFactories: [sdk.createCodemodeExtension()] });
   await mergedLoader.reload();
@@ -454,4 +495,30 @@ test('outside a Faur project, /faur designs a new agent and has nothing to check
     await session.extensionRunner.getCommand('faur').handler('status', { hasUI: true, cwd: root, ui: { notify: message => notices.push(message) } });
     assert.match(notices.join('\n'), /not a Faur project/i);
   } finally { session.dispose(); }
+});
+
+test('plain Pi activates generated browsing defaults and only explicitly requested codemode', t => {
+  const root = mkdtempSync(join(tmpdir(), 'faur-pi-tool-selection-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const home = join(root, 'home');
+  mkdirSync(home);
+  const probe = join(repo, 'test/pi-lab/probe.ts');
+  for (const [label, tools] of [['omitted', undefined], ['empty', []], ['browse', ['read']], ['codemode', ['codemode']]]) {
+    const project = join(root, label);
+    mkdirSync(project);
+    const model = { schema: 1, name: label, orchestrator: { name: 'lead', model: 'probe/m', ...(tools === undefined ? {} : { tools }) } };
+    for (const file of generateProject(model).files) {
+      mkdirSync(dirname(join(project, file.path)), { recursive: true });
+      writeFileSync(join(project, file.path), file.content);
+    }
+    const output = join(root, `${label}.json`);
+    const env = { ...process.env, PI_OFFLINE: '1', PI_CODING_AGENT_DIR: home, PROBE_WAIT: '0', PROBE_OUT: output };
+    delete env.PI_SUBAGENT_CHILD;
+    delete env.PI_SUBAGENT_PARENT_SESSION;
+    const run = spawnSync('pi', ['-p', '--no-session', '--approve', '-e', probe, '--model', 'probe/m', 'test'], { cwd: project, env, encoding: 'utf8', timeout: 30000 });
+    assert.equal(run.status, 0, `${label}: ${run.stderr}`);
+    const active = JSON.parse(readFileSync(output, 'utf8')).activeTools;
+    for (const name of ['read', 'ls', 'find', 'grep']) assert.equal(active.includes(name), label !== 'empty', `${label}: ${name}`);
+    assert.equal(active.includes('codemode'), label === 'codemode', `${label}: codemode`);
+  }
 });

@@ -10,13 +10,8 @@ agents:
     model: provider-b/model-small
     thinking: high
     tools: [read]
+    skills: [missing-skill]
 integrations:
   mcp:
     - name: openseo
       config: { url: "http://localhost:3002/mcp" }
-policies:
-  enforced:
-    - agent: seo-analyst
-      tools: [read]
-    - mcp: missing-server
-      hide: ["publish_*"]

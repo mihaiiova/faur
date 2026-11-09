@@ -48,8 +48,8 @@ the issues.
   6. Deferred: #48 (compose an existing sandbox), #70 (protected
      integrations).
 - **Simplification epic #73 (2026-11-06):** #75 is done (native skills
-  replace document and workflow declarations). Next #74 (tool access and
-  policies; design decision first), then #76 (diagnostics).
+  replace document and workflow declarations). #74 (tool access) and #76
+  (diagnostics) are in review; #74's design was approved before implementation.
 - **Known limitations (current release):**
   - `check-agent --connect` uses a separate project-local Pi home and saves
     trust there; this does not verify the user's plain-Pi configuration.
@@ -108,7 +108,7 @@ is inferred instead, it is marked as an assumption.
 | Plain Pi launch | Implemented | `generate.mjs`; real-Pi SDK and headless workflow tests |
 | Per-agent models and thinking | Implemented, satisfactory | `models.mjs` |
 | Skills from skills.sh (search, preview, pin, project-local install) | Implemented, satisfactory | `registry-skills.mjs`, `skill-sources.mjs` |
-| Specialists and tool allowlists | Implemented; foreground extension paths require explicit verification | `policy.mjs`, `generate.mjs`, `asking.mjs` |
+| Specialists and tool allowlists | Implemented; foreground extension paths require explicit verification | `tool-selection.mjs`, `generate.mjs`, `asking.mjs` |
 | Calls that ask the user, kept with the orchestrator | Implemented, satisfactory | `asking.mjs`; generated "What you can use" sections |
 | Declared CLI commands with per-run approval, `request_permission` | Implemented, satisfactory | `cli-tools.mjs`, `permissions-extension.mjs` |
 | MCP configuration, env-var credentials, hidden tools | Implemented | `mcp-gen.mjs` uses Pi built-in MCP. Per-call MCP approval has been removed. |

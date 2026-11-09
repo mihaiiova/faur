@@ -70,16 +70,3 @@ integrations:
       config: { command: npx, args: [ "cloudflare-mcp", "--stdio" ] }
   env:
     - { name: GH_TOKEN, secret: true }
-
-policies:
-  enforced:
-    - agent: scout
-      tools: [ read, grep, find, ls ]
-    - agent: reviewer
-      tools: [ read, grep, find, ls, bash ]
-    - agent: worker
-      tools: [ read, grep, find, ls, bash, edit, write ]
-  advisory:
-    - "Never commit secrets: keep tokens in env vars or gitignored files."
-    - "Merging to development and pushing releases requires explicit user
-      approval."

@@ -196,7 +196,7 @@ run time comes from Pi and the packages the project pins, never from Faur:
 [pi-commands](https://github.com/mihaiiova/pi-commands) for declared commands,
 only when declared. The Faur version that last built the project is recorded in
 `.faur/build.json`. A change that removes
-a capability lists any prompt, workflow or policy that still mentions it, and
+a capability lists any prompt that still mentions it, and
 `/faur review` flags prompts that describe specific tools.
 
 ### Commands: CLI permissions per agent

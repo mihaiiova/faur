@@ -18,12 +18,11 @@ test("includeTools declares only those tools directly; the rest of the server is
   assert.deepEqual(servers.seo, { url: "http://x", exposure: "hidden", toolExposure: { get_report: "direct", "run_*": "direct" } });
 });
 
-test("excludeTools and enforced hide policies are hidden and win over includeTools", () => {
-  const policies = { enforced: [{ mcp: "seo", hide: ["publish_*"] }] };
-  const servers = mcpFromIntegrations([{ name: "seo", config: { url: "http://x", includeTools: ["get_report", "publish_post", "delete_*"], excludeTools: ["delete_*"] } }], policies);
+test("excludeTools are hidden and win over includeTools", () => {
+  const servers = mcpFromIntegrations([{ name: "seo", config: { url: "http://x", includeTools: ["get_report", "publish_post", "delete_*"], excludeTools: ["delete_*", "publish_*"] } }]);
   assert.deepEqual(servers.seo.toolExposure, { "delete_*": "hidden", "publish_*": "hidden", get_report: "direct" });
   assert.equal(servers.seo.exposure, "hidden");
-  const open = mcpFromIntegrations([{ name: "seo", config: { url: "http://x" } }], policies);
+  const open = mcpFromIntegrations([{ name: "seo", config: { url: "http://x", excludeTools: ["publish_*"] } }]);
   assert.deepEqual(open.seo, { url: "http://x", exposure: "deferred", toolExposure: { "publish_*": "hidden" } });
 });
 

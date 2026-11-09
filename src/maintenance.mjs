@@ -1,5 +1,5 @@
 /** Configuration maintenance reuses the Faur's existing model/ownership seams. */
-import { BASELINE_TOOLS } from './policy.mjs';
+import { BASELINE_TOOLS, withBaseline, withBaselineTools } from './tool-selection.mjs';
 import { changeModel, parsedModel, legacyDeclarations } from './changes.mjs';
 import { scanSkills } from './discover.mjs';
 import { staleMentions } from './agent-context.mjs';
@@ -73,7 +73,8 @@ const AGENT_NATIVE_FIELDS = new Set(['name', 'description', 'tools', 'model', 't
 
 /** Identify native-only keys and project resources without returning their values. */
 function nativeUnrepresented(root, model, settings, mcpJson) {
-  const result = importSystem(settings, {}).report.flagged.filter(item => !['orchestrator.model', 'packages'].includes(item.key)).map(item => ({ path: '.pi/settings.json', setting: item.key, reason: item.reason }));
+  const report = importSystem(settings, {}).report;
+  const result = [...report.flagged, ...report.blocked].filter(item => !['orchestrator.model', 'packages'].includes(item.key)).map(item => ({ path: '.pi/settings.json', setting: item.key, reason: item.reason }));
   const add = (path, setting, reason = 'Native configuration is not represented in the design; preserved unless explicitly resolved.') => result.push({ path, setting, reason });
   for (const key of Object.keys(mcpJson)) if (!['mcpServers', 'autoEnableCodemode'].includes(key)) add('.pi/mcp.json', key);
   for (const [name, server] of Object.entries(mcpJson.mcpServers ?? {})) {
@@ -980,7 +981,7 @@ export function planChange(root, operations, options = {}) {
         changedMcp: changedEntries(oldModel.integrations?.mcp ?? [], model.integrations?.mcp ?? []),
         changedCli: changedEntries(oldModel.integrations?.cli ?? [], model.integrations?.cli ?? []),
         setupCommands: setupSteps(model).filter(step => !setupSteps(oldModel).some(old => JSON.stringify(old) === JSON.stringify(step))),
-        toolsAndPoliciesChanged: JSON.stringify([oldModel.orchestrator?.tools, oldModel.agents, oldModel.policies]) !== JSON.stringify([model.orchestrator?.tools, model.agents, model.policies]),
+        toolsAndAgentsChanged: JSON.stringify([withBaselineTools(oldModel).orchestrator, withBaselineTools(oldModel).agents]) !== JSON.stringify([withBaselineTools(model).orchestrator, withBaselineTools(model).agents]),
         warning: 'Setup checks execute shell commands automatically; installs execute after confirmation. Packages and stdio MCP servers execute code at next launch. MCP URLs expose data to their operators. Approval authorizes this declared execution surface.',
       },
       // Against the design as recorded, so tools the browsing baseline adds are named.
@@ -1006,7 +1007,7 @@ function agentGrants(before, after) {
   const was = agents(before), now = agents(after);
   return [...new Set([...Object.keys(was), ...Object.keys(now)])].flatMap(name => {
     const a = was[name], b = now[name];
-    const tools = x => Array.isArray(x?.tools) ? x.tools : [];
+    const tools = x => !x ? [] : Array.isArray(x.tools) ? x.tools : withBaseline(x.tools);
     const gains = tools(b).filter(t => !tools(a).includes(t)), loses = tools(a).filter(t => !tools(b).includes(t));
     const model = a?.model !== b?.model ? { from: a?.model ?? null, to: b?.model ?? null } : undefined;
     return gains.length || loses.length || model || !a || !b ? [{ agent: name, ...(!a ? { added: true } : {}), ...(!b ? { removed: true } : {}), gains, loses, ...(model ? { model } : {}) }] : [];

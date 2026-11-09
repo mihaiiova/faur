@@ -25,6 +25,13 @@ test("SKILL.md converses without depending on host skills and previews before ap
   assert.ok(skill.includes("--dry-run"), "references the preview-before-apply dry-run");
 });
 
+test("capability questions distinguish current checks from historical evidence", () => {
+  const guidance = skill.split('## Capability questions')[1].split('## Initial review')[0].replace(/\s+/g, ' ');
+  for (const phrase of ['lastCapabilityCheck', 'historical', 'unverified', 'CLI presence is not authentication', 'do not connect automatically', 'do not prove a task succeeds']) {
+    assert.ok(guidance.includes(phrase), `capability guidance includes ${phrase}`);
+  }
+});
+
 test("SKILL.md designs conversationally and keeps the build confirmation", () => {
   for (const phase of ["### Explore", "### Synthesize", "### Build"]) assert.ok(skill.includes(phase), `describes ${phase}`);
   for (const mark of ["**Confirmed**", "**Proposed**", "**Unresolved**"]) assert.ok(skill.includes(mark), `marks ${mark}`);

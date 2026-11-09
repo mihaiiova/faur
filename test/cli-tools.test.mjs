@@ -91,7 +91,7 @@ test('generated agents get cli_ tools without a launch default; defaultTools kee
   assert.match(empty.files.find((f) => f.path === '.pi/agents/quiet.md').content, /\ntools:\nmodel: /, 'an empty allowlist is a bare key, never "[]"');
   assert.doesNotMatch(agent, /\nasync:/);
   const settings = JSON.parse(generated.files.find((f) => f.path === '.pi/settings.json').content);
-  assert.deepEqual(settings.defaultTools, ['read']);
+  assert.deepEqual(settings.defaultTools, ['read', 'ls', 'find', 'grep']);
   const caps = effectiveCapabilities(model, { piPackages: pkg.pi.packages });
   assert.deepEqual(caps.commands.map((c) => [c.name, c.approve, c.agents]), [['echo-title', true, ['lead']], ['show-body', false, ['writer']], ['unused', true, []]]);
   assert.equal(checkCapabilities(model, { settings, mcpJson: JSON.parse(generated.files.find((f) => f.path === '.pi/mcp.json')?.content ?? '{}') }, { piPackages: pkg.pi.packages }).ok, true);
@@ -104,19 +104,26 @@ test('a grant to a subagent with no tools list starts one', () => {
   assert.throws(() => changeModel(yaml.stringify(doc), grantOps(doc, { name: 'echo-two', command: 'node', args: ['--version'] }, ['bare'])), /"bare" may run in the background, .*command echo-two/, 'a command that asks cannot go to a subagent');
 });
 
-test('grant and revoke edit the declaration, agent tools and enforced policies', () => {
-  const text = yaml.stringify({ ...model, policies: { enforced: [{ agent: 'writer', tools: ['read', 'cli:show-body'] }] } });
+test('grant and revoke edit the declaration and agent tools', () => {
+  const text = yaml.stringify(model);
   const base = changeModel(text, [{ op: 'set', target: 'packages', value: [] }]).model;
   const granted = changeModel(text, grantOps(base, { name: 'create-issue', command: 'gh', args: ['issue', 'create', '--title', '{title}'], approve: false }, ['lead', 'writer'])).model;
   assert.deepEqual(granted.integrations.cli.at(-1), { command: 'gh', args: ['issue', 'create', '--title', '{title}'], approve: false, name: 'create-issue' });
   assert.ok(granted.orchestrator.tools.includes('cli:create-issue'));
-  assert.ok(granted.policies.enforced[0].tools.includes('cli:create-issue'), 'the policy ceiling is extended');
   assert.ok(granted.agents[0].tools.includes('cli:create-issue'), 'the agent list stays consistent');
   const revoked = changeModel(yaml.stringify(granted), revokeOps(granted, 'create-issue')).model;
   assert.equal(revoked.integrations.cli.some((c) => c.name === 'create-issue'), false);
   assert.equal(revoked.orchestrator.tools.includes('cli:create-issue'), false);
-  assert.equal(revoked.policies.enforced[0].tools.includes('cli:create-issue'), false);
   assert.equal(revoked.agents[0].tools.includes('cli:create-issue'), false);
+});
+
+test('revoking a command preserves an omitted lead tool list', () => {
+  const { tools, ...orchestrator } = model.orchestrator;
+  const doc = { ...model, orchestrator };
+  const revoked = changeModel(yaml.stringify(doc), revokeOps(doc, 'show-body')).model;
+  assert.equal(Object.hasOwn(revoked.orchestrator, 'tools'), false);
+  assert.equal(revoked.integrations.cli.some(c => c.name === 'show-body'), false);
+  assert.deepEqual(JSON.parse(generateProject(revoked, {}).files.find(f => f.path === '.pi/settings.json').content).defaultTools, ['read', 'ls', 'find', 'grep']);
 });
 
 test('launch check reports a missing command once per agent, and approval a subagent cannot give', (t) => {

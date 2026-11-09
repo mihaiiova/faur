@@ -26,13 +26,6 @@ function validDoc(overrides = {}) {
       mcp: [{ name: "openseo", config: { url: "http://localhost:3002/mcp" } }],
       env: [{ name: "OPENSEO_URL", secret: false }],
     },
-    policies: {
-      enforced: [
-        { agent: "seo-analyst", tools: ["read"] },
-        { mcp: "openseo", hide: ["publish_*"] },
-      ],
-      advisory: ["Publishing requires human confirmation"],
-    },
     ...overrides,
   };
 }
@@ -118,37 +111,11 @@ test("validateSystem accepts package and path skill sources and rejects others",
   assert.ok(validateSystem(both).errors.some((e) => e.includes('unknown key "body"')));
 });
 
-test("validateSystem rejects an incompatible policy (undeclared mcp)", () => {
-  const doc = validDoc();
-  doc.policies.enforced = [{ mcp: "not-there", hide: ["x"] }];
-  const { errors } = validateSystem(doc);
-  assert.ok(errors.some((e) => e.includes('policies.enforced[0].mcp references "not-there"')));
-});
-
 test("validateSystem rejects duplicate agent names", () => {
   const doc = validDoc();
   doc.agents.push({ name: "seo-analyst", model: "provider-b/model-small" });
   const { errors } = validateSystem(doc);
   assert.ok(errors.some((e) => e.includes('duplicates name "seo-analyst"')));
-});
-
-test("validateSystem rejects a policy rule with neither agent nor mcp", () => {
-  const doc = validDoc();
-  doc.policies.enforced = [{ tools: ["read"] }];
-  const { errors } = validateSystem(doc);
-  assert.ok(errors.some((e) => e.includes('exactly one of "agent" or "mcp"')));
-});
-
-test("validateSystem rejects duplicate enforced rules for the same agent or mcp", () => {
-  const doc = validDoc();
-  doc.policies.enforced.push({ agent: "seo-analyst", tools: ["read", "write"] });
-  const { errors } = validateSystem(doc);
-  assert.ok(errors.some((e) => e.includes("duplicate agent rule")), "duplicate agent rule rejected");
-
-  const doc2 = validDoc();
-  doc2.policies.enforced.push({ mcp: "openseo", hide: ["delete_*"] });
-  const errors2 = validateSystem(doc2).errors;
-  assert.ok(errors2.some((e) => e.includes("duplicate mcp rule")), "duplicate mcp rule rejected");
 });
 
 test("validateSystem accepts declared npm:/git: packages and rejects bad specs", () => {
@@ -185,10 +152,9 @@ test("validateSystem requires shell-safe, non-reserved env names", () => {
 
 test("validateSystem rejects tools that ask the user in a background subagent", () => {
   const base = validDoc();
-  const withMcp = (config, agentTools, enforced = base.policies.enforced) => validateSystem(validDoc({
+  const withMcp = (config, agentTools) => validateSystem(validDoc({
     agents: [...base.agents, { name: "researcher", model: "provider-a/m", tools: agentTools }],
     integrations: { ...base.integrations, mcp: [{ name: "openseo", config: { url: "http://localhost:3002/mcp", ...config } }] },
-    policies: { ...base.policies, enforced },
   })).errors;
   assert.ok(withMcp({ approveTools: true }, ["mcp:openseo"]).some((e) => e.includes("config.approveTools is no longer supported")));
   assert.ok(withMcp({ approveTools: ["run_*"] }, ["read"]).some((e) => e.includes("config.approveTools is no longer supported")));

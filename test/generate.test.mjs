@@ -5,7 +5,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSystem } from "../src/parse.mjs";
 import { generateProject } from "../src/generate.mjs";
-import { withBaselineTools } from "../src/policy.mjs";
+import { withBaselineTools } from "../src/tool-selection.mjs";
 import { COMMANDS_PACKAGE } from "../src/deps.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -64,7 +64,7 @@ test("the runtime packages get their native configuration, generated from the de
   assert.ok(!paths.includes(".pi/commands.json") && !paths.some((p) => p.includes("pi-permission-system")), "nothing without the declarations");
   const readme = byPath(generateProject(withCommand, {}).files, "README.md").content;
   assert.match(readme, /Declared commands run without a shell.*\(pi-commands, `git:github\.com\/mihaiiova\/pi-commands@v0\.1\.0`\)/);
-  assert.match(byPath(generateProject(withServer, {}).files, "README.md").content, /### Advisory[\s\S]*`helper` is told it has no MCP tools; it is not prevented from calling them/);
+  assert.match(byPath(generateProject(withServer, {}).files, "README.md").content, /Lead defaultTools controls built-in tools; independently registered extension tools may remain active/);
 });
 
 test("files a design does not use are not generated", () => {

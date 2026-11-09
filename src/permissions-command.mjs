@@ -9,7 +9,7 @@ import { parsedModel } from './changes.mjs';
 import { readText } from './maintenance-store.mjs';
 import { planChange, applyChange, approvalPreview, approvalSummary } from './maintenance.mjs';
 import { cliEntries, cliAgents, checkShape, formatCommand, splitCommandLine, grantOps, revokeOps, commandShape, readerFileWarning } from './cli-tools.mjs';
-import { enforcedAgentTools } from './policy.mjs';
+import { withBaseline } from './tool-selection.mjs';
 import { confirmPreview } from './preview-dialog.mjs';
 
 const shape = (entry) => formatCommand(entry.command, entry.args ?? []);
@@ -30,7 +30,7 @@ export function permissionsCommand(root) {
       const [action = 'list', ...rest] = args.trim().split(/\s+/).filter(Boolean);
       const current = parsedModel(readText(root, '.pi/system.yaml'));
       if (action === 'list') {
-        const enforced = (agent) => enforcedAgentTools(agent.name, current.policies, agent.tools);
+        const enforced = (agent) => withBaseline(agent.tools);
         const lines = cliEntries(current).map((c) => `${c.name}: ${shape(c)}\n  agents: ${cliAgents(current, c.name, enforced).join(', ') || 'none'}; ${c.approve === false ? 'runs without asking' : 'asks before each run'}`);
         tell(`${lines.join('\n') || 'No commands declared.'}\n\nadd | remove <name>`);
         return;

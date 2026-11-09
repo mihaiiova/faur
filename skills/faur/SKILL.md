@@ -117,7 +117,7 @@ interview again; reuse the design and the conversation, then:
    that materially change functionality, cost, external permissions or
    security — and ask those before writing `system.yaml`.
 3. **Construct** `.pi/system.yaml` from the primitives (`orchestrator`,
-   `agents`, `skills`, `integrations`, `policies`, `packages`).
+   `agents`, `skills`, `integrations`, `packages`).
 4. **Validate** with `faur validate <dir>`.
 5. **Preview** with `faur generate <dir> --dry-run`, and summarize what will
    be created — agents with their exact models and tools, skills with their
@@ -209,9 +209,10 @@ first; the user decides.
 - **Tools:** every agent with a tools list gets `read`, `ls`, `find` and
   `grep`; Faur adds them, so list them and don't argue them away. Add other
   tools only for what the agent does (`write`/`edit` for files it produces,
-  `bash` only when nothing narrower works). To keep a specialist away from
-  files, use an enforced policy rule `{ agent, tools }`, which is not
-  extended.
+  `bash` only when nothing narrower works). Empty `tools: []` requests no tools.
+  A nonempty specialist tool list narrower than the browsing baseline is not
+  representable: say so instead of widening it. Lead defaultTools controls built-in tools; independently registered extension
+  tools may remain active, and MCP exposure is configured separately.
 - **Command-line tools:** when an agent needs a CLI the user already has
   (`gh`, `wrangler`, `stripe`, a project script), prefer a declared command
   in `integrations.cli` over `bash`: a fixed shape such as
@@ -283,14 +284,14 @@ first; the user decides.
 Acceptance scenarios for this conversational behavior:
 `../../docs/faur-conversation.md`.
 
-## Policy and ownership contract
+## Capability and ownership contract
 
 - **Enforced at the tool layer:** agent `tools:` allowlists (pi-subagents),
   MCP `excludeTools` (Pi's MCP exposure) — a child agent lacks unlisted tools
   and a hidden MCP tool is registered but unreachable. These
   limit which tools an agent calls, not what those tools reach: an agent
   with `bash` or a shell-like command reaches anything the user can.
-- **Advisory (guidance only):** README and workflow/skill prose stating approval
+- **Advisory (guidance only):** README and skill prose stating approval
   requirements (e.g. "publishing requires human confirmation"). Prose is never
   mistaken for enforcement.
 - **Ownership:** derived files (`.pi/settings.json`, `.pi/mcp.json`) regenerate
@@ -331,7 +332,7 @@ when this turn ends. Don't do the work, and don't tell them to type
    Discover and fetch only when the request adds or changes something outside
    this system — an MCP server, skill, package, model or command-line tool —
    or the user asks for options. Changes to prompts, descriptions, tool
-   selections, model assignments or policies need only
+   selections or model assignments need only
    the inspection from step 1: go straight to the proposal.
    - action=discover with a query searches public package/MCP registries; add
      clis="docker gh" to check which commands exist on this machine (presence
@@ -403,12 +404,12 @@ when this turn ends. Don't do the work, and don't tell them to type
      switches one agent's (or the orchestrator's) model. Offer only models from
      the inspected available-model list; thinking is optional and null removes it.
    - {"op":"set","target":"orchestrator","value":{...}} replaces the block.
-     Also supported: policies, integrations, packages. Use these to change
-     tools, policies or declared dependencies without a generic path-based
+     Also supported: integrations, packages. Use these to change
+     tools, integrations or declared dependencies without a generic path-based
      mutation language.
    - {"op":"replace","model":{...}} for uncommon edits.
      The entire replacement is strictly validated; its YAML formatting is reset.
-   Repair all dependent policy/model references in the same batch.
+   Repair all dependent capability/model references in the same batch.
    Skills: whenever an agent is added or changed, search skills.sh for its
    role and suggest a few candidates for that agent (source, installs, page).
    Pin each one the user wants to consider with discover skill=..., and
@@ -463,9 +464,24 @@ them: the Faur renders a "What you can use" section from the declarations
 so it always matches what the agent actually has. Keep a rule about an action
 as an outcome ("never modify an existing issue; check for duplicates first"),
 and put command approval in approve, not prose. Faur does not add per-call approval to MCP calls. When a preview has
-staleMentions, a removed capability is still mentioned in a prompt or advisory
-policy: update that text in the same proposal so agents
+staleMentions, a removed capability is still mentioned in a prompt: update that text in the same proposal so agents
 stop reaching for it.
+
+## Capability questions
+
+When asked what works or why a capability is missing, inspect first. Summarize
+what is configured, any problems in `currentChecks` and the next actionable
+step in plain language. Inspection does not run setup checks; report them as
+unverified rather than passed. Clearly distinguish the current checks from
+`lastCapabilityCheck`: the latter is historical even when an entry says
+"verified now"; quote its timestamp and do not imply it was rechecked. If no
+current evidence establishes availability, say it is unverified. CLI presence
+is not authentication; configuration checks do not prove a task succeeds.
+Mention relevant host MCP conflicts and that plain Pi inherits global resources.
+On request, provide the detailed evidence and point to `/faur check` or
+`faur check-agent --connect` for explicit checks; do not connect automatically.
+For integration or capability changes, continue through the normal proposal
+and approval flow. Do not invent a readiness state or infer task success.
 
 ## Initial review — read-only
 

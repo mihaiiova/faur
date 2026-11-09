@@ -46,7 +46,7 @@ function project(t, doc = model) {
 
 test("each agent's section lists exactly what it has", () => {
   const lead = capabilitySection(model, 'lead');
-  assert.match(lead, /- \*\*Built-in tools:\*\* read\n/);
+  assert.match(lead, /- \*\*Built-in tools:\*\* read, ls, find, grep\n/);
   assert.match(lead, /`openseo` \(all tools; tools named `mcp__openseo__<tool>`, found with tool_search\) — SEO data/);
   assert.match(lead, /`github-issues` \(only `mcp__github_issues__list_issues`, `mcp__github_issues__issue_write`\)/, 'includeTools are declared directly');
   assert.match(lead, /`cli_create_issue` — Open an issue: `gh issue create --title \{title\}`; the user approves each run/);

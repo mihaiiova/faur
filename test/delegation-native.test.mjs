@@ -88,4 +88,32 @@ test('tracked generated project delegates MCP calls and enforces specialist sele
       }
     }
   }
+  // Run native children with each representable selection. Faur must emit its
+  // browsing baseline for omitted lists rather than Pi's wider defaults.
+  for (const [label, tools] of [['omitted', undefined], ['empty', []], ['explicit', ['read']], ['codemode', ['codemode']]]) {
+    const worker = { ...model.agents[0] };
+    if (tools === undefined) delete worker.tools; else worker.tools = tools;
+    const variant = generateProject({ ...model, agents: [worker] }, {}, { piPackages: ['npm:pi-subagents@0.83.1'] });
+    const file = variant.files.find(f => f.path === '.pi/agents/worker.md');
+    writeFileSync(join(root, file.path), file.content);
+    const log = join(base, `selection-${label}.jsonl`);
+    const vars = { ...env(), PI_CODING_AGENT_DIR: home, FAKE_PORT: String(port), FAUR_DELEGATION_LOG: log, FAUR_DELEGATION_ASYNC: 'false', FAUR_DELEGATION_TOOL: 'mcp__projsrv__projsrv_secret' };
+    const server = spawn(process.execPath, [asset('delegation-model.mjs')], { env: vars, stdio: 'ignore' });
+    try {
+      await waitForServer(port, server);
+      const run = spawnSync('pi', ['--no-session', '-e', asset('fake-provider.ts'), '--model', 'fake/m', '-p', '--approve', '/skill:test delegate'], { cwd: root, env: vars, input: '', encoding: 'utf8', timeout: 60000 });
+      assert.equal(run.status, 0, `${label}: ${run.stderr}\n${run.stdout}`);
+      const events = readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse).filter(e => e.child);
+      assert.ok(events.length, `no child for ${label}`);
+      for (const name of ['read', 'ls', 'find', 'grep']) assert.equal(events[0].tools.includes(name), label !== 'empty', `${label}: ${name}`);
+      for (const name of ['bash', 'edit', 'write']) assert.ok(!events[0].tools.includes(name), `${label}: unexpected ${name}`);
+      assert.equal(events[0].tools.includes('codemode'), label === 'codemode', `${label}: codemode`);
+    } finally {
+      if (server.exitCode === null && server.signalCode === null) {
+        const exited = new Promise(resolve => server.once('exit', resolve));
+        server.kill();
+        await exited;
+      }
+    }
+  }
 });
