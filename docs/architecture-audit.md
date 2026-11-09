@@ -1,5 +1,14 @@
 # Architecture audit (v0.26.0)
 
+> **2026-11-09 backlog reconciliation:** This is a dated architecture record,
+> not an active implementation queue. Runtime result/artifact/MCP-adapter
+> proposals #43/#44/#46 and scenario proposals #38/#39 are closed as not planned
+> in Faur. #35 now concerns consented native-session investigation, #37 is
+> consumer-led external scheduling, and reference acceptance from #59 lives in
+> #68. Sandbox/credential research (#48/#70) remains historical evidence, not a
+> delivered guarantee or active commitment. See [roadmap.md](roadmap.md) for the
+> current queue; older dependency and adapter references below are historical.
+
 Audit of the implementation at `79d1b6a` (v0.26.0, 2026-11-02) against the
 principles in [AGENTS.md](../AGENTS.md). It covers the code, not only the
 documents. `bash test/test.sh` passed (45 suites; live and
