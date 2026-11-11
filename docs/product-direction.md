@@ -96,7 +96,7 @@ A specialized agent is:
 | Permissions | tool allowlists and hidden MCP tools (Pi); Faur does not provide per-call MCP approvals. Declared commands may require approval |
 | Domain knowledge | ordinary project files and skills |
 | Learned lessons (optional) | a notes file the orchestrator keeps |
-| Triggers | `pi` (interactive), `pi -p` (headless); external scheduling is consumer-led and deferred (#37) |
+| Triggers | `pi` (interactive), `pi -p` (headless); optional native Linux user-systemd timers configured by the maker (#37), no Faur runtime |
 | Execution history | Pi session files |
 
 `system.yaml` is Faur's compact **design record** for all of this. It is
@@ -226,7 +226,9 @@ agent's files, and never affects how it runs.
   with Faur without losing those edits.
 - When a project needs periodic execution, an ordinary skill runs under an
   existing external scheduler without Faur at runtime; the caller owns execution
-  outcomes and failure handling. Scheduling support remains deferred (#37).
+  outcomes and failure handling. Maker-side Linux user-systemd scheduling (#37)
+  previews and approves native unit lifecycle changes; other backends are not
+  supplied. See [scheduling](scheduling.md).
 - A revision uses evidence from real runs, and the user can see why it is
   proposed.
 
@@ -241,10 +243,10 @@ In order (details and issues in [the roadmap](roadmap.md)):
    preserve native resource filters, and inspect exact versions statically.
 3. **Small maker improvements:** project identity edits (#69), native specialist
    launch/report verification (#45, #54), and code handoff/skill guidance (#51).
-4. **Consumer-led investigation and scheduling (#35, #37):** read native session
-   evidence with consent; compose an external scheduler only when a real
-   project needs it. No runtime recorder, workflow/result schema, artifact engine
-   or caller adapter is planned in Faur.
+4. **Consumer-led investigation (#35):** read native session evidence with
+   consent. Existing optional scheduling support (#37) composes user-systemd
+   timers for Owlie's Linux-server requirement. No runtime recorder,
+   workflow/result schema, artifact engine or caller adapter is planned in Faur.
 
 The maker-only migration and simplification implementation have shipped.
 Outstanding reference-project acceptance is tracked by #68. Archived sandbox

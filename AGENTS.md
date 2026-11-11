@@ -144,6 +144,8 @@ configuration, a skill or an existing package cannot do it.
   why.
 - Run the suite: `bash test/test.sh`. Opt-in gates:
   `RUN_FAUR_DELEGATION_TEST=1` (real Pi, local fake model, needs network);
+  `RUN_FAUR_SCHEDULE_TEST=1` (Linux user systemd, temporary native timers,
+  real Pi with a local fake model; no paid provider);
   `RUN_FAUR_LIVE_TESTS=1` and `RUN_CLEAN_ENV_TEST=1` (real providers, cost
   tokens); `FAUR_CLEAN_MACHINE_TEST=1` (after publishing a release).
 - Generated output is pinned by golden fixtures in

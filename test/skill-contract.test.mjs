@@ -64,8 +64,17 @@ test("SKILL.md says how to run the faur CLI, and design mode names its location"
 test("conversational acceptance scenarios are documented", () => {
   const doc = readFileSync(resolve(here, "../docs/faur-conversation.md"), "utf-8");
   const scenarios = doc.match(/^## \d+\. /gm) ?? [];
-  assert.equal(scenarios.length, 10, "ten numbered scenarios");
-  for (const part of ["**Input.**", "**Pass.**", "**Fail.**"]) assert.equal(doc.split(part).length - 1, 10, `each scenario has ${part}`);
+  assert.equal(scenarios.length, 11, "eleven numbered scenarios, including approved scheduling");
+  for (const part of ["**Input.**", "**Pass.**", "**Fail.**"]) assert.equal(doc.split(part).length - 1, 11, `each scenario has ${part}`);
+});
+
+test("scheduling guidance clarifies output handling before proposing a schedule", () => {
+  const guidance = skill.split('## External scheduling')[1].split('## After generation')[0].replace(/\s+/g, ' ');
+  for (const phrase of ['Before proposing a schedule', 'What should happen to the result?', 'open question', 'examples', 'not an exhaustive list or a required menu', 'unattended', 'advisory']) {
+    assert.ok(guidance.includes(phrase), `scheduling output guidance includes ${phrase}`);
+  }
+  assert.match(guidance, /already settled.*do not ask again/i);
+  assert.match(guidance, /skill.*separately approved change/i);
 });
 
 test("SKILL.md asks for each agent's model from the full Pi line-up", () => {
