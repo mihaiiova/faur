@@ -68,6 +68,15 @@ test("conversational acceptance scenarios are documented", () => {
   for (const part of ["**Input.**", "**Pass.**", "**Fail.**"]) assert.equal(doc.split(part).length - 1, 11, `each scenario has ${part}`);
 });
 
+test("scheduling guidance clarifies output handling before proposing a schedule", () => {
+  const guidance = skill.split('## External scheduling')[1].split('## After generation')[0].replace(/\s+/g, ' ');
+  for (const phrase of ['Before proposing a schedule', 'What should happen to the result?', 'email', 'folder', 'another application', 'no output', 'recipient', 'unattended', 'advisory']) {
+    assert.ok(guidance.includes(phrase), `scheduling output guidance includes ${phrase}`);
+  }
+  assert.match(guidance, /already settled.*do not ask again/i);
+  assert.match(guidance, /skill.*separately approved change/i);
+});
+
 test("SKILL.md asks for each agent's model from the full Pi line-up", () => {
   assert.ok(skill.includes("pi --list-models"), "names the model catalog source");
   assert.ok(/ships no default models/.test(skill), "hardcodes no models");

@@ -12,6 +12,16 @@ In the existing project, ask:
 > /faur Run the progress-check skill every morning at 09:00 Europe/Bucharest,
 > with a 15-minute timeout. Show me the proposed schedule.
 
+Before proposing the schedule, Faur clarifies what should happen to the result:
+a report in a specified folder, email to a specified recipient, delivery to
+another application, or explicitly no output. An already-settled choice is
+reused, not asked again. External delivery needs verified tool/MCP access,
+credentials, authorization and unattended suitability. The agreed output
+behavior belongs in the execution skill; any needed skill/integration change
+is approved separately before scheduling. The journal is not assumed to be the
+report destination, and choosing no output does not disable logs. This is
+advisory conversational guidance, not a CLI/validator requirement.
+
 Faur checks that the skill exists, proposes one schedule operation, then asks
 whether to apply, discuss or discard it. Installation is an **external-state
 change**: the approval includes native file diffs and systemctl commands.

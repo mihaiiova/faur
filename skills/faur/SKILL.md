@@ -252,6 +252,21 @@ See `../../docs/scheduling.md` for the complete contract and CLI recipe.
 - Confirm the existing skill, calendar, explicit timezone, timeout and credential
   source. Do not invent a timezone or copy shell credentials. The skill must
   already exist locally with matching frontmatter; approve skill creation first.
+- **Before proposing a schedule, clarify output handling:** ask "What should
+  happen to the result?" Offer saving a report in a folder, sending email,
+  delivering to another application, or explicitly no output. If this is already
+  settled in the conversation or existing skill, confirm that choice; do not ask
+  again. Do not assume the systemd journal is the intended report destination.
+  Resolve the exact folder/file convention, email recipient or application
+  destination as applicable. For external delivery, verify the needed MCP/tool
+  and credentials, settle authorization, and check whether it can run unattended;
+  merely having an MCP server does not prove delivery works or grant permission
+  to send. If capability or authorization is missing, resolve it before proposing
+  the schedule, or agree on another destination. Record the agreed behavior in
+  the execution skill through a separately approved change when needed, before
+  scheduling it; do not add output fields to the schedule schema. Explicitly
+  choosing no output does not disable systemd logs. This clarification is
+  advisory skill guidance, not a validator-enforced scheduling condition.
 - During maintenance, use `faur_plan action=schedules` for read-only native unit
   and manager observations, including lingering. Missing manager or `Linger=no`
   must be explained; never run sudo or enable lingering automatically.
