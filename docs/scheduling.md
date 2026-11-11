@@ -13,8 +13,9 @@ In the existing project, ask:
 > with a 15-minute timeout. Show me the proposed schedule.
 
 Before proposing the schedule, Faur clarifies what should happen to the result:
-a report in a specified folder, email to a specified recipient, delivery to
-another application, or explicitly no output. An already-settled choice is
+ask an open question, not a fixed-choice menu. Examples include a report in a
+specified folder, email to a specified recipient, delivery to another application,
+or explicitly no output; these are not an exhaustive list. An already-settled choice is
 reused, not asked again. External delivery needs verified tool/MCP access,
 credentials, authorization and unattended suitability. The agreed output
 behavior belongs in the execution skill; any needed skill/integration change

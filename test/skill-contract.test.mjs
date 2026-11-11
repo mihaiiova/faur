@@ -70,7 +70,7 @@ test("conversational acceptance scenarios are documented", () => {
 
 test("scheduling guidance clarifies output handling before proposing a schedule", () => {
   const guidance = skill.split('## External scheduling')[1].split('## After generation')[0].replace(/\s+/g, ' ');
-  for (const phrase of ['Before proposing a schedule', 'What should happen to the result?', 'email', 'folder', 'another application', 'no output', 'recipient', 'unattended', 'advisory']) {
+  for (const phrase of ['Before proposing a schedule', 'What should happen to the result?', 'open question', 'examples', 'not an exhaustive list or a required menu', 'unattended', 'advisory']) {
     assert.ok(guidance.includes(phrase), `scheduling output guidance includes ${phrase}`);
   }
   assert.match(guidance, /already settled.*do not ask again/i);

@@ -253,8 +253,10 @@ See `../../docs/scheduling.md` for the complete contract and CLI recipe.
   source. Do not invent a timezone or copy shell credentials. The skill must
   already exist locally with matching frontmatter; approve skill creation first.
 - **Before proposing a schedule, clarify output handling:** ask "What should
-  happen to the result?" Offer saving a report in a folder, sending email,
-  delivering to another application, or explicitly no output. If this is already
+  happen to the result?" Ask an open question; the user's desired behavior is
+  not limited to predefined destinations. Saving a report in a folder, sending
+  email, delivering to another application, or explicitly no output are examples,
+  not an exhaustive list or a required menu. If this is already
   settled in the conversation or existing skill, confirm that choice; do not ask
   again. Do not assume the systemd journal is the intended report destination.
   Resolve the exact folder/file convention, email recipient or application
