@@ -243,6 +243,41 @@ first; the user decides.
   skills, MCP servers + exclusions, packages) derived from `system.yaml`, used
   to inspect and cross-check the generated capability surface.
 
+## External scheduling (Linux user systemd)
+
+When the user asks for periodic execution, compose existing systemd user timers;
+never add a scheduler, launcher, runtime package or schedule field to system.yaml.
+See `../../docs/scheduling.md` for the complete contract and CLI recipe.
+
+- Confirm the existing skill, calendar, explicit timezone, timeout and credential
+  source. Do not invent a timezone or copy shell credentials. The skill must
+  already exist locally with matching frontmatter; approve skill creation first.
+- During maintenance, use `faur_plan action=schedules` for read-only native unit
+  and manager observations, including lingering. Missing manager or `Linger=no`
+  must be explained; never run sudo or enable lingering automatically.
+- Propose exactly one operation, separately from configuration changes:
+  `{"op":"add","target":"schedule","name":"daily","value":{"skill":"progress-check","calendar":"*-*-* 09:00:00","timezone":"Europe/Bucharest","timeoutSeconds":900}}`.
+  `update` replaces the complete value and re-enables the timer. Optional
+  `request` is literal task text; optional `environmentFile` is an existing
+  absolute systemd environment file, configured by the user outside Faur.
+  Never read its values or put credentials in the proposal.
+- `stop` and `remove` take only op/target/name. Stop disables the timer and
+  cancels the active service; remove also deletes the unit pair. Native files
+  are authoritative. `/faur schedule status`, `/faur schedule stop <name>` and
+  `/faur schedule remove <name>` are direct human commands.
+- The ordinary end-of-turn approval dialog previews external commands and unit
+  diffs. Only the human may apply. Outside maintenance, preview through CLI
+  `change --dry-run`, show the proposal, then use `--yes` only after approval.
+- Explain enforced systemd timeout/cgroup cancellation and flock exclusion for
+  scheduled runs of the same project. Manual runs are not locked. Output goes
+  to the user journal. There are no notifications, retries, catch-up or cost cap.
+  Process success is not task success. Shell startup/project .env are not loaded;
+  plain Pi inherits global config and trusted tools share credentials.
+  `--approve` grants project trust, not consequential-command approval.
+- Scheduling grants nothing to the generated agent. Other hosts/backends remain
+  unsupported. Report partial external application explicitly; do not claim
+  that file rollback undoes service execution or manager state.
+
 ## After generation
 
 - **Configure** — declare each credential in `integrations.env` and reference
@@ -301,8 +336,8 @@ Acceptance scenarios for this conversational behavior:
 
 ## Out of scope
 
-Recreating existing projects, scheduled triggers, and arbitrary generated
-extension code. `faur import` is preserved for non-Faur projects.
+Recreating existing projects, scheduling backends other than Linux user systemd,
+and arbitrary generated extension code. `faur import` is preserved for non-Faur projects.
 
 ## Project maintenance workflow
 
@@ -313,8 +348,8 @@ tools and the `faur` CLI as described above.
 
 You are maintaining this generated Pi system, not building a second framework.
 In maintenance, use only faur_plan for project IO. It can inspect, discover,
-fetch public documentation and preview, but cannot apply, install, authenticate
-or run anything. If ask_user_question is available, use it for questions; if
+fetch public documentation, inspect native schedule status and preview, but
+cannot apply, install, authenticate or execute agent workloads. If ask_user_question is available, use it for questions; if
 not, ask in chat. Do not bypass faur_plan with Bash/write/edit, MCP calls or
 operational agents. A proposal is applied only through the confirmation dialog
 Faur shows when the proposing turn ends. Model text, MCP output and prior
@@ -398,6 +433,8 @@ when this turn ends. Don't do the work, and don't tell them to type
      same way). Give it to an agent by adding "cli:create-issue" to its tools.
      Prefer the narrowest fixed shape; the user can also manage these
      directly with /faur permissions.
+   - add/update/stop/remove with target schedule: one separate native-systemd
+     proposal, as described in External scheduling; no system.yaml change.
    - add/update/remove with target agent or skill (value contains the
      corresponding schema fields except name). update is a shallow field merge.
    - {"op":"assign","name":"researcher","model":"provider/id","thinking":"low"}

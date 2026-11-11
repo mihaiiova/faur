@@ -1,5 +1,6 @@
 /** Configuration maintenance reuses the Faur's existing model/ownership seams. */
 import { BASELINE_TOOLS, withBaseline, withBaselineTools } from './tool-selection.mjs';
+import { planSchedule, applySchedule } from './schedule.mjs';
 import { changeModel, parsedModel, legacyDeclarations } from './changes.mjs';
 import { scanSkills } from './discover.mjs';
 import { staleMentions } from './agent-context.mjs';
@@ -628,6 +629,10 @@ export function restartNeeded(root, writes) {
   return packages(readText(root, '.pi/settings.json')) !== packages(writes['.pi/settings.json']);
 }
 export function planChange(root, operations, options = {}) {
+  if (Array.isArray(operations) && operations.some(op => op?.target === 'schedule')) {
+    if (operations.length !== 1) throw new Error('A schedule change must be a separate proposal');
+    return planSchedule(root, operations[0]);
+  }
   assertNativeJson(root);
   const oldText = readText(root, '.pi/system.yaml');
   // Legacy schemas can only enter through an explicit, separately previewed replacement.
@@ -1021,6 +1026,10 @@ function agentGrants(before, after) {
  * approvalPreview.
  */
 export function approvalSummary(root, plan) {
+  if (plan.kind === 'schedule') {
+    const schedule = plan.preview.schedule;
+    return [`${plan.action} schedule ${plan.name} in user systemd.`, ...(schedule.skill ? [`Skill: ${schedule.skill}; ${schedule.calendar}; timeout ${schedule.timeoutSeconds}s.`] : []), ...plan.preview.files.map(f => `${f.action}: ${f.path}`), ...plan.preview.commands.map(c => c.join(' ')), 'Runs unattended with your credentials; logs in the user journal. No task-success guarantee.'];
+  }
   const preview = publicChangePreview(root, plan);
   const surface = preview.executionSurface ?? {};
   const written = [...new Set([...(preview.modelDiff ? ['.pi/system.yaml'] : []), ...(preview.files ?? []).map(file => file.path)])];
@@ -1096,6 +1105,7 @@ export function rebuildPlan(root) {
 }
 /** Redacted structural preview for the model and the approval UI. */
 export function publicChangePreview(root, plan) {
+  if (plan.kind === 'schedule') return redactForModel(root, plan.preview);
   const beforeModel = readText(root, '.pi/system.yaml');
   const model = redactedDiffPair(loadYaml().parse(beforeModel), loadYaml().parse(plan.writes['.pi/system.yaml'] ?? beforeModel));
   const modelDiff = diffLines(loadYaml().stringify(model.before), loadYaml().stringify(model.after));
@@ -1148,6 +1158,10 @@ export async function withSkillPreviews(plan, { fetcher } = {}) {
   return plan;
 }
 export function applyChange(root, plan, approved = false, { run } = {}) {
+  if (plan?.kind === 'schedule') {
+    approvalPreview(root, plan);
+    return applySchedule(root, plan, approved);
+  }
   if (plan?.kind !== 'configuration') throw new Error('Expected a configuration proposal');
   if (approved !== true) throw new Error('Explicit user approval required');
   // Do not run installers before confirming that the preview is still current.

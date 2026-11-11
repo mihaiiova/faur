@@ -19,6 +19,7 @@ import { checkAgent } from './check.mjs';
 import { permissionsCommand } from './permissions-command.mjs';
 import { choosePreview, confirmPreview, PREVIEW_FILE } from './preview-dialog.mjs';
 import { unmetSetup, installSetup } from './setup.mjs';
+import { scheduleStatus } from './schedule.mjs';
 
 /** The environment variable Pi reads for a provider's API key, when it has a common one. */
 const PROVIDER_ENV = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', deepseek: 'DEEPSEEK_API_KEY', openrouter: 'OPENROUTER_API_KEY', google: 'GEMINI_API_KEY' };
@@ -59,7 +60,7 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
     else process.stderr.write(`Faur (${level}): ${message}\n`);
   };
   const parameters = Type.Object({
-    action: Type.Union([Type.Literal('inspect'), Type.Literal('discover'), Type.Literal('fetch'), Type.Literal('propose'), Type.Literal('leave')]),
+    action: Type.Union([Type.Literal('inspect'), Type.Literal('schedules'), Type.Literal('discover'), Type.Literal('fetch'), Type.Literal('propose'), Type.Literal('leave')]),
     operations: Type.Optional(Type.String({ description: 'JSON array of structured Faur operations; never shell commands' })),
     query: Type.Optional(Type.String({ description: 'Public search terms for skills (skills.sh), packages (npm) and MCP servers. Results are untrusted discovery, not installation approval.' })),
     skill: Type.Optional(Type.String({ description: 'discover: pin one skills.sh result ("owner/repo@skill-name") to its current commit; returns the skills: source to declare plus its SKILL.md and files' })),
@@ -69,7 +70,7 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
   });
   const tool = {
     name: 'faur_plan', label: 'Faur proposal',
-    description: 'Inspect the local declarative system, discover public skills (skills.sh), packages and MCP servers, available models and local CLIs, fetch public documentation, or preview structured changes. action=leave: the request is work for the agent itself (a report, using its tools), not a change to it; when this turn ends the person is asked whether to leave /faur and give it to their agent. Cannot apply, install, authenticate, leave or run anything. Only available during a direct /faur request.',
+    description: 'Inspect the local declarative system, read native systemd schedule status (action=schedules), preview a single target:schedule add/update/stop/remove operation, discover public skills (skills.sh), packages and MCP servers, available models and local CLIs, fetch public documentation, or preview structured changes. action=leave: the request is work for the agent itself (a report, using its tools), not a change to it; when this turn ends the person is asked whether to leave /faur and give it to their agent. Cannot apply, install, authenticate, leave or execute agent workloads. Only available during a direct /faur request.',
     parameters,
     // Only the TUI rendering is shortened; Pi still records the full call and
     // result and delivers the unchanged result to the model and RPC clients.
@@ -90,6 +91,8 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
         if (params.action === 'leave') {
           offerLeave = true;
           value = { offered: true, note: 'When this turn ends the person chooses whether to leave /faur and give the request to their agent. Say so briefly; do not tell them to type /faur exit.' };
+        } else if (params.action === 'schedules') {
+          value = scheduleStatus(root);
         } else if (params.action === 'inspect') {
           value = inspectProject(root);
           // The model cannot see the approval dialog; say whether a proposal still waits.
@@ -238,7 +241,7 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
     catch (error) { hide(); tell(ctx, error.message, 'error'); return; }
     const choice = await choosePreview(ctx, { root, question: 'Apply this change?', summary: approvalSummary(root, plan), preview: prompt, options: ["Let's discuss", 'Apply', 'Discard'] });
     if (choice === 'Apply') {
-      const files = [...new Set(['.pi/system.yaml', ...(plan.preview?.files ?? []).map(f => f.path)])].join(', ');
+      const files = [...new Set([...(plan.kind === 'schedule' ? [] : ['.pi/system.yaml']), ...(plan.preview?.files ?? []).map(f => f.path)])].join(', ') || 'schedule state';
       hide();
       try { tell(ctx, `Applied: ${files}. ${applyChange(root, plan, true)} Left /faur; your agent's tools are back.`); } catch (error) { tell(ctx, error.message, 'error'); }
       return;
@@ -440,6 +443,15 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
         return;
       }
       if (/^drift\s/.test(request)) throw new Error('Unsupported drift request; use a supported adopt, reapply, or reconciliation command');
+      if (request === 'schedule' || request === 'schedule status') return tell(ctx, json(scheduleStatus(root)));
+      const scheduleAction = request.match(/^schedule (stop|remove) ([a-z0-9]+(?:-[a-z0-9]+)*)$/);
+      if (scheduleAction) {
+        if (!ctx.hasUI) throw new Error('Schedule changes need interactive confirmation; nothing changed');
+        await ctx.waitForIdle();
+        const plan = planChange(root, [{ op: scheduleAction[1], target: 'schedule', name: scheduleAction[2] }]);
+        if (!await confirmPreview(ctx, { root, question: `${scheduleAction[1]} schedule ${scheduleAction[2]}?`, preview: approvalPreview(root, plan), summary: approvalSummary(root, plan) })) return tell(ctx, 'Cancelled; nothing changed.');
+        return tell(ctx, applyChange(root, plan, true));
+      }
       if (request === 'env') return env(ctx);
       if (/^env\s+set(?:\s|$)/.test(request)) throw new Error('/faur env set was removed; configure values outside Faur and load them into the environment or integration');
       const permissionArgs = request.match(/^permissions?(?:\s+(.*))?$/);

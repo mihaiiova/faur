@@ -27,12 +27,16 @@ import { atomicWrite } from './maintenance-store.mjs';
 import { checkAgent, loadProjectTools, connectMcp } from './check.mjs';
 import { parsedModel } from './changes.mjs';
 import { unmetSetup, installSetup } from './setup.mjs';
+import { scheduleStatus } from './schedule.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const USAGE = `Usage: faur <command> [options]
 
 Commands:
+  schedule <dir> [status]    inspect native user-systemd schedules (Linux)
+                             use change with one target:schedule operation to
+                             add/update/stop/remove; preview before --yes
   setup <dir> --yes          run unmet setup installs after explicit approval
   validate <dir>             validate <dir>/.pi/system.yaml against schema v1
   check-agent <dir> [--connect]
@@ -478,6 +482,14 @@ async function main(argv) {
   if (command === "-h" || command === "--help" || command === undefined) {
     process.stdout.write(USAGE);
     process.exitCode = command === undefined ? 1 : 0;
+    return;
+  }
+
+  if (command === 'schedule') {
+    if (!dir || rest.some(arg => arg !== 'status')) throw new Error('Use: faur schedule <dir> [status]');
+    const report = scheduleStatus(resolve(dir));
+    console.log(JSON.stringify(report, null, 2));
+    if (!report.manager.available) process.exitCode = 1;
     return;
   }
 

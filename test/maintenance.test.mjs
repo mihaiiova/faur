@@ -88,6 +88,44 @@ function adapter(initialTools = ['read'], entries = []) {
   }, sessionManager: { getBranch: () => entries }, modelRegistry: { getAvailable: () => [] } };
   return { pi, Type, ctx, events, tools, commands, messages, notices, sent, entries, active: () => active, dialogs, editors, prompts, status, widgets, choose: (...c) => choices.push(...c), approve: () => { confirm = true; choices.push('Apply'); }, endTurn: (c = ctx) => events.agent_end({}, c) };
 }
+test('schedule proposals use the Pi approval dialog, reject stale native files and cannot apply headless', { skip: process.platform !== 'linux' || requireResult('systemd-analyze', ['--version']).status !== 0 || !existsSync(`/run/user/${process.getuid()}`) }, async t => {
+  const root = project(t);
+  const home = join(root, 'config');
+  const oldHome = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = home;
+  t.after(() => { if (oldHome === undefined) delete process.env.XDG_CONFIG_HOME; else process.env.XDG_CONFIG_HOME = oldHome; });
+  mkdirSync(join(root, '.pi/skills/check'), { recursive: true });
+  writeFileSync(join(root, '.pi/skills/check/SKILL.md'), '---\nname: check\ndescription: Check progress\n---\nCheck.\n');
+  const operations = JSON.stringify([{ op: 'add', target: 'schedule', name: 'daily', value: { skill: 'check', calendar: '*-*-* 09:00:00', timezone: 'UTC' } }]);
+  const headless = adapter();
+  headless.ctx.hasUI = false;
+  await registerMaintenance(headless.pi, headless.Type, root)('schedule daily checks', headless.ctx);
+  const inventory = await headless.tools.faur_plan.execute('status', { action: 'schedules' }, null, null, headless.ctx);
+  assert.deepEqual(JSON.parse(inventory.content[0].text).schedules, []);
+  await headless.tools.faur_plan.execute('schedule', { action: 'propose', operations }, null, null, headless.ctx);
+  await headless.endTurn();
+  assert.equal(existsSync(join(home, 'systemd/user')), false);
+  const cancelled = adapter();
+  await registerMaintenance(cancelled.pi, cancelled.Type, root)('schedule daily checks', cancelled.ctx);
+  await cancelled.tools.faur_plan.execute('schedule', { action: 'propose', operations }, null, null, cancelled.ctx);
+  cancelled.choose('Discard');
+  await cancelled.endTurn();
+  assert.equal(existsSync(join(home, 'systemd/user')), false);
+  assert.match(cancelled.prompts[0].title, /systemctl/);
+  assert.match(cancelled.prompts[0].title, /Skill: check; \*-\*-\* 09:00:00 UTC; timeout 1800s/);
+  const stale = adapter();
+  await registerMaintenance(stale.pi, stale.Type, root)('schedule daily checks', stale.ctx);
+  const result = await stale.tools.faur_plan.execute('schedule', { action: 'propose', operations }, null, null, stale.ctx);
+  const preview = JSON.parse(result.content[0].text);
+  const file = preview.files[0].path;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, '# Written by somebody else\n');
+  stale.choose('Apply');
+  await stale.endTurn();
+  assert.equal(readFileSync(file, 'utf8'), '# Written by somebody else\n');
+  assert.ok(stale.notices.some(([msg]) => /foreign|changed since preview/.test(msg)), JSON.stringify(stale.notices));
+});
+
 test('/faur mode survives /reload and ends with a restart', async t => {
   const root = project(t);
   const operational = ['read', 'write', 'cli_hello', 'ask_user_question'];

@@ -46,9 +46,11 @@ requires approval is refused by pi-commands; nothing runs. Faur does not add per
 
 ## Left to the caller
 
-Pi does not provide these, and the project does not either. A caller that needs
-them implements them around the `pi` process in the consuming project or an
-existing external adapter. Historical adapter proposal #46 is closed, not a
+Pi does not provide these, and the generated project does not either. A caller
+that needs them supplies an existing execution mechanism. Faur's optional
+[Linux user-systemd recipe](scheduling.md) (#37) configures native units with
+systemd timeout/cgroup cancellation and flock exclusion for scheduled runs of
+the same project; it is not a Faur runtime or general caller adapter. Historical adapter proposal #46 is closed, not a
 planned Faur feature:
 
 - a timeout and cancellation (kill the process group);

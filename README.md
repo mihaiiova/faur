@@ -252,6 +252,14 @@ Inside it, `/faur` is the one command:
 | `/faur check` | Validate `system.yaml`, compare the generated files with it, and run the launch check. |
 | `/faur status` | Agents and models, capabilities, and whether the project still pins Faur from an earlier release. |
 | `/faur sync` | Preview rebuilding the project with this Faur and apply only after confirmation. |
+| `/faur schedule status` | Inspect native Linux user-systemd timers and the last service process result, not task success. |
+| `/faur schedule stop <name>` / `remove <name>` | Preview and confirm disabling/cancelling a schedule, or removing its native units. |
+
+To create or change a schedule, ask `/faur run the progress-check skill daily at
+09:00 Europe/Bucharest with a 15-minute timeout`. Faur proposes native systemd
+units and asks before changing external state. Scheduling adds nothing to the
+agent schema or runtime; see [scheduling](docs/scheduling.md) for credentials,
+lingering, enforced timeout/overlap behavior, limitations and CLI usage.
 
 Lower-level: `/faur env` and `/faur permissions [add | remove
 <name>]`. Headless sessions never apply a change.

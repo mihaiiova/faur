@@ -25,7 +25,8 @@ schema describes; do not remove restrictions silently.
 ## Active queue — reconciled 2026-11-09
 
 The rewritten issues need their stated design or verification step; old readiness
-labels have been removed. No implementation is currently in progress.
+labels have been removed. #37 is activated for the Owlie Linux-server consumer;
+implementation is complete on `feat/37-systemd-schedules` (not merged).
 
 | Order | Issue | Next bounded step |
 |---|---|---|
@@ -38,12 +39,13 @@ labels have been removed. No implementation is currently in progress.
 | Verification first | [#54 Specialist report reading](https://github.com/mihaiiova/faur/issues/54) | Verify native tools/durable outputs already solve prompt-free report access; no secret-path or command-classification subsystem. |
 | Guidance/test task | [#51 Code handoffs and unattended skill suitability](https://github.com/mihaiiova/faur/issues/51) | Precise code handoffs and model-reviewed skill suitability; incorporates #52 without a scanner. |
 | Consumer-led definition | [#35 Native run investigation](https://github.com/mihaiiova/faur/issues/35) | Consent, bounded/redacted native session evidence, observations versus inference; incorporates #40 without a runtime index. |
-| Deferred | [#37 External scheduling](https://github.com/mihaiiova/faur/issues/37) | Demonstrate an ordinary skill under an existing external scheduler, then justify minimal maker-side support. |
+| Implemented on branch (owner priority, 2026-11-11; not merged) | [#37 External scheduling](https://github.com/mihaiiova/faur/issues/37) | Linux user-systemd lifecycle implemented; default suite and opt-in real-Pi/native-timer gate passed. No Faur runtime/schema field; no live Owlie schedule installed. |
 
 No workflow-result, run-folder, scenario-engine or runtime-adapter issue is a
-blocker for this queue. Scheduling is not implemented. The historical
-`agents-cron` selection is a candidate to revalidate against the actual consumer,
-not a mandatory dependency or a new workflow schema.
+blocker for this queue. #37 uses existing systemd user timers and flock for the
+concrete Linux consumer, not the historical `agents-cron` candidate. The branch
+adds no runtime dependency, mandatory package or workflow schema; see
+[scheduling](scheduling.md). Other scheduling backends remain out of scope.
 
 ## Retired commitments
 
@@ -86,6 +88,8 @@ The public-alpha gap map is #68, not a blanket readiness claim.
 - Headless trust approval does not grant approval for consequential commands.
   Commands requiring interactive approval are refused unattended.
 - Callers own timeouts, cancellation, overlapping runs, background-child cleanup
-  and any external scheduling. Process completion is not task success.
+  and external scheduling outside the #37 systemd recipe. That recipe delegates
+  timeouts/cgroup cancellation to systemd and scheduled overlap exclusion to
+  flock. Process completion is not task success.
 - `check-agent --connect` uses a separate project-local Pi home and its trust;
   it is not a functional verification of the user's ambient plain-Pi setup.
