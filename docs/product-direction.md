@@ -243,10 +243,10 @@ In order (details and issues in [the roadmap](roadmap.md)):
    preserve native resource filters, and inspect exact versions statically.
 3. **Small maker improvements:** project identity edits (#69), native specialist
    launch/report verification (#45, #54), and code handoff/skill guidance (#51).
-4. **Consumer-led investigation and scheduling (#35, #37):** read native session
-   evidence with consent; compose existing user-systemd timers for Owlie's
-   Linux-server requirement (#37). No runtime recorder, workflow/result schema, artifact engine
-   or caller adapter is planned in Faur.
+4. **Consumer-led investigation (#35):** read native session evidence with
+   consent. Existing optional scheduling support (#37) composes user-systemd
+   timers for Owlie's Linux-server requirement. No runtime recorder,
+   workflow/result schema, artifact engine or caller adapter is planned in Faur.
 
 The maker-only migration and simplification implementation have shipped.
 Outstanding reference-project acceptance is tracked by #68. Archived sandbox

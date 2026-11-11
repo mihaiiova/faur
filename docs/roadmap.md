@@ -12,6 +12,12 @@ generated projects run with plain `pi` without Faur or `system.yaml` at runtime.
 Native files are authoritative for execution; changes are previewed, approved
 and reconciled rather than continuously synchronized.
 
+**Unreleased:** [#37 External scheduling](https://github.com/mihaiiova/faur/issues/37)
+adds approved Linux user-systemd schedule lifecycle management. The default suite
+and opt-in real-systemd/real-Pi gate passed. Output handling is clarified before
+scheduling, with destinations presented as examples, not a fixed menu. No runtime
+or schema dependency is added; no live Owlie schedule was installed.
+
 Simplification epic [#73](https://github.com/mihaiiova/faur/issues/73) is complete:
 native skills replaced document/workflow declarations (#75), agent tools and
 MCP integration exclusions replaced overlapping policies (#74), and
@@ -25,8 +31,7 @@ schema describes; do not remove restrictions silently.
 ## Active queue — reconciled 2026-11-09
 
 The rewritten issues need their stated design or verification step; old readiness
-labels have been removed. #37 is activated for the Owlie Linux-server consumer;
-implementation is complete on `feat/37-systemd-schedules` (not merged).
+labels have been removed. #37 is complete and removed from the active queue.
 
 | Order | Issue | Next bounded step |
 |---|---|---|
@@ -39,11 +44,10 @@ implementation is complete on `feat/37-systemd-schedules` (not merged).
 | Verification first | [#54 Specialist report reading](https://github.com/mihaiiova/faur/issues/54) | Verify native tools/durable outputs already solve prompt-free report access; no secret-path or command-classification subsystem. |
 | Guidance/test task | [#51 Code handoffs and unattended skill suitability](https://github.com/mihaiiova/faur/issues/51) | Precise code handoffs and model-reviewed skill suitability; incorporates #52 without a scanner. |
 | Consumer-led definition | [#35 Native run investigation](https://github.com/mihaiiova/faur/issues/35) | Consent, bounded/redacted native session evidence, observations versus inference; incorporates #40 without a runtime index. |
-| Implemented on branch (owner priority, 2026-11-11; not merged) | [#37 External scheduling](https://github.com/mihaiiova/faur/issues/37) | Linux user-systemd lifecycle implemented; default suite and opt-in real-Pi/native-timer gate passed. No Faur runtime/schema field; no live Owlie schedule installed. |
 
 No workflow-result, run-folder, scenario-engine or runtime-adapter issue is a
 blocker for this queue. #37 uses existing systemd user timers and flock for the
-concrete Linux consumer, not the historical `agents-cron` candidate. The branch
+concrete Linux consumer, not the historical `agents-cron` candidate. This
 adds no runtime dependency, mandatory package or workflow schema; see
 [scheduling](scheduling.md). Other scheduling backends remain out of scope.
 
