@@ -47,7 +47,9 @@ requires approval is refused by pi-commands; nothing runs. Faur does not add per
 ## Left to the caller
 
 Pi does not provide these, and the project does not either. A caller that needs
-them implements them around the `pi` process (the caller adapter, #46):
+them implements them around the `pi` process in the consuming project or an
+existing external adapter. Historical adapter proposal #46 is closed, not a
+planned Faur feature:
 
 - a timeout and cancellation (kill the process group);
 - one-at-a-time locking, if runs share state;

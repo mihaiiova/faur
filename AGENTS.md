@@ -13,7 +13,7 @@ The command, package, CLI and skill are `faur`; the maintenance tool is
 | Question | Source of truth |
 |---|---|
 | What Faur is, its boundaries and non-goals | [docs/product-direction.md](docs/product-direction.md) |
-| What is planned, in what order | GitHub issues (epic #24), indexed in [docs/roadmap.md](docs/roadmap.md) — the only roadmap |
+| What is planned, in what order | Active GitHub issues, indexed in [docs/roadmap.md](docs/roadmap.md) — the only roadmap (historical epic #24 is retired) |
 | Current architecture, known complexity and cleanup plan | [docs/architecture-audit.md](docs/architecture-audit.md) |
 | What generated agents contain | golden fixtures in `test/fixtures/generate/*/golden` |
 | `system.yaml` and file ownership | [skills/faur/schema.md](skills/faur/schema.md) |

@@ -96,7 +96,7 @@ A specialized agent is:
 | Permissions | tool allowlists and hidden MCP tools (Pi); Faur does not provide per-call MCP approvals. Declared commands may require approval |
 | Domain knowledge | ordinary project files and skills |
 | Learned lessons (optional) | a notes file the orchestrator keeps |
-| Triggers | `pi` (interactive), `pi -p` (headless), scheduled (planned) |
+| Triggers | `pi` (interactive), `pi -p` (headless); external scheduling is consumer-led and deferred (#37) |
 | Execution history | Pi session files |
 
 `system.yaml` is Faur's compact **design record** for all of this. It is
@@ -142,7 +142,7 @@ something a project gets from a package, Faur moves to the built-in.
   Native files the
   developer edits are adopted or reconciled when Faur is invoked; features
   the schema can't represent are preserved and reported, not dropped.
-- **Hybrid orchestration.** Declare responsibilities, capabilities and policies;
+- **Hybrid orchestration.** Declare responsibilities, agent tools and integration exclusions;
   describe task procedures in skills. Leave delegation, sequencing and tool choice to the
   agents at run time. No graph workflow engine.
 - **Enforced vs advisory.** Tool allowlists and hidden MCP tools are enforced
@@ -224,8 +224,9 @@ agent's files, and never affects how it runs.
   the capability works rather than only that it is configured.
 - A developer can edit the native files by hand and later revise the agent
   with Faur without losing those edits.
-- A workflow runs unattended on a schedule, and its results and failures can
-  be inspected afterwards.
+- When a project needs periodic execution, an ordinary skill runs under an
+  existing external scheduler without Faur at runtime; the caller owns execution
+  outcomes and failure handling. Scheduling support remains deferred (#37).
 - A revision uses evidence from real runs, and the user can see why it is
   proposed.
 
@@ -233,15 +234,19 @@ agent's files, and never affects how it runs.
 
 In order (details and issues in [the roadmap](roadmap.md)):
 
-0. **Correct what is wrong today:** security and capability wording in
-   generated output; one plan/apply lifecycle.
-1. **Faur as maker:** the staged migration to ordinary Pi projects
-   (verify Pi behavior, native prompt and pay-per-use output, plain-`pi`
-   launch and headless, enforcement from packages, design record and
-   reconcile, rename).
-2. **Reliable results:** structured workflow results, per-run artifacts,
-   specialists that launch reliably, re-specified for plain Pi.
-3. **Capability composition:** discover, inspect, select and verify existing
-   Pi packages, extensions and MCP servers.
-4. **Execution evidence and verification:** runs read from Pi sessions,
-   scheduling through an existing provider, acceptance scenarios.
+1. **Public-alpha evidence (#68):** consolidate existing boundary tests and
+   identify missing minimal, marketing and QA coverage; do not build a general
+   scenario framework.
+2. **Capability composition (#29, #31, #30):** discover existing Pi packages,
+   preserve native resource filters, and inspect exact versions statically.
+3. **Small maker improvements:** project identity edits (#69), native specialist
+   launch/report verification (#45, #54), and code handoff/skill guidance (#51).
+4. **Consumer-led investigation and scheduling (#35, #37):** read native session
+   evidence with consent; compose an external scheduler only when a real
+   project needs it. No runtime recorder, workflow/result schema, artifact engine
+   or caller adapter is planned in Faur.
+
+The maker-only migration and simplification implementation have shipped.
+Outstanding reference-project acceptance is tracked by #68. Archived sandbox
+and protected-integration requirements are not delivered capabilities or active
+implementation commitments; their security limitations remain in force.
