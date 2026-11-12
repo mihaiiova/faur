@@ -7,12 +7,12 @@ are in [product-direction.md](product-direction.md); engineering practice is in
 
 ## Current state
 
-**v0.38.0** is released. Faur creates and maintains ordinary Pi projects;
+**v0.39.0** is released. Faur creates and maintains ordinary Pi projects;
 generated projects run with plain `pi` without Faur or `system.yaml` at runtime.
 Native files are authoritative for execution; changes are previewed, approved
 and reconciled rather than continuously synchronized.
 
-**Unreleased:** [#37 External scheduling](https://github.com/mihaiiova/faur/issues/37)
+**v0.39.0:** [#37 External scheduling](https://github.com/mihaiiova/faur/issues/37)
 adds approved Linux user-systemd schedule lifecycle management. The default suite
 and opt-in real-systemd/real-Pi gate passed. Output handling is clarified before
 scheduling, with destinations presented as examples, not a fixed menu. No runtime
