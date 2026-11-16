@@ -88,17 +88,22 @@ that only advanced systems need. The minimal agent
 
 Decided 2026-11-02: **Faur is a Pi extension that creates and maintains
 ordinary Pi projects. The generated project is the product, Pi is its runtime,
-Faur is only the maker.** Since #63 nothing of Faur runs inside a generated
-agent: projects never pin Faur, declared commands come from
-[pi-commands](https://github.com/mihaiiova/pi-commands) pinned by need and configured natively. Faur does not provide MCP per-call approvals.
-Do not add run-time code to Faur.
+Faur is only the maker.** Since #63 ordinary projects do not load Faur;
+declared commands come from [pi-commands](https://github.com/mihaiiova/pi-commands)
+pinned by need and configured natively. Faur does not provide MCP per-call approvals.
+
+Approved exception (2026-11-16): opt-in `mcpServer` projects bundle Faur's thin
+stdio MCP adapter and developer maintenance assets. Pi still owns execution;
+Faur owns only the public declaration, hosting and invocation boundary. No
+Agent Kit package, orchestration engine or mandatory minimal-agent runtime.
+See [docs/mcp-serving.md](docs/mcp-serving.md).
 
 - **Faur** (`extensions/faur/` the `/faur` command, `src/` the CLI and
   modules, `skills/faur/` the skill and schema, `test/`): discover, validate,
   generate, diff, apply, reconcile, check. Pure functions where possible
   (`validateSystem`, `generateProject`, `effectiveCapabilities`); file I/O in
-  one apply path. It runs in the developer's Pi, never inside a generated
-  agent's run.
+  one apply path. The maker runs in the developer's Pi, not inside agent
+  execution. The optional MCP host (`mcp/`) uses Pi's SDK in fresh processes.
 - **Generated project**: native Pi configuration plus the developer's prompts,
   skills and scripts. Launched with `pi`; Faur does not generate `run`
   scripts (#62). Project-specific tools live in the project until a second
@@ -139,10 +144,14 @@ configuration, a skill or an existing package cannot do it.
 
 ## Working in this repository
 
-- Node ESM (`.mjs`), no build step, no dependencies beyond pinned `yaml`.
+- Node ESM (`.mjs`), no build step. Core dependencies are pinned `yaml` and
+  `ajv` (public operation schema validation). Opt-in MCP distribution pins its
+  runtime dependencies separately in `mcp/package.json` and its lockfile.
   Match the surrounding style: short modules, pure seams, comments that explain
   why.
 - Run the suite: `bash test/test.sh`. Opt-in gates:
+  `RUN_FAUR_MCP_TEST=1` (independent npm install, real Pi/MCP, local fake model,
+  needs npm network; no paid provider);
   `RUN_FAUR_DELEGATION_TEST=1` (real Pi, local fake model, needs network);
   `RUN_FAUR_SCHEDULE_TEST=1` (Linux user systemd, temporary native timers,
   real Pi with a local fake model; no paid provider);

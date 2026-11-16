@@ -4,11 +4,11 @@
  * the package extension registers /faur and routes to it.
  */
 import { readFileSync, rmSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { resolve } from 'node:path';
 import { approvalSummary, inspectProject, nativeDrift, planChange, planSettingsAdoption, planSettingsReconciliation, planPromptAdoption, planAgentAdoption, planAgentReconciliation, planIntegrationAdoption, planIntegrationReconciliation, planNativeReapply, applyChange, approvalPreview, publicChangePreview, withSkillPreviews, rebuildPlan, projectStatus } from './maintenance.mjs';
 import { checkProject } from './check.mjs';
 import { searchSkills, resolveRegistrySkill } from './registry-skills.mjs';
-import { json, readText, readJson } from './maintenance-store.mjs';
+import { json, readText, readJson, safePath } from './maintenance-store.mjs';
 import { fetchDocument, documentSlice, checkUrl, fetchJson } from './maintenance-fetch.mjs';
 import { envStatus } from './maintenance-env.mjs';
 import { redactForModel } from './maintenance-secrets.mjs';
@@ -25,10 +25,13 @@ import { scheduleStatus } from './schedule.mjs';
 const PROVIDER_ENV = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', deepseek: 'DEEPSEEK_API_KEY', openrouter: 'OPENROUTER_API_KEY', google: 'GEMINI_API_KEY' };
 
 /** The footer status while /faur maintains a project. */
-const MODE_ENTRY = 'faur-mode';
+export const MODE_ENTRY = 'faur-mode';
 export const MODE_STATUS = "In /faur: your agent's tools are off · reply to continue · /faur exit to leave";
 
-export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, Text } = {}) {
+export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, Text, sessionRoot = root } = {}) {
+  root = resolve(root);
+  sessionRoot = resolve(sessionRoot);
+  const targetIsSession = () => root === sessionRoot;
   let armed = false;
   let review = false;
   let pending = null;
@@ -50,6 +53,9 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
   const publicFetch = (href) => fetcher(checkUrl(href).href);
   /** What this session registered: tool names, and MCP tools with their exposure (servers that have connected). */
   const loaded = () => {
+    // The caller's resources are not evidence about an agent maintained from
+    // its parent project. Selecting a target never loads its executable resources.
+    if (!targetIsSession()) return {};
     const all = pi.getAllTools?.();
     // Who registered /mcp in this session: Pi itself, or an extension replacing it.
     const mcp = pi.getCommands?.().find(c => c.name === 'mcp');
@@ -109,7 +115,8 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
           value.availableModels = (ctx.modelRegistry?.getAvailable?.() ?? []).map(m => ({ provider: m.provider, id: m.id, cost: m.cost }));
           // Execution evidence is deliberately summary-only: never include tool
           // outputs, prompts, credentials or unrelated session content.
-          value.executionEvidence = (ctx.sessionManager?.getBranch?.() ?? []).filter(e => e.type === 'message' && e.message?.role === 'toolResult').map(e => ({ tool: e.message.toolName, failed: e.message.isError === true }));
+          value.executionEvidence = targetIsSession() ? (ctx.sessionManager?.getBranch?.() ?? []).filter(e => e.type === 'message' && e.message?.role === 'toolResult').map(e => ({ tool: e.message.toolName, failed: e.message.isError === true })) : [];
+          value.maintenanceSession = { cwd: sessionRoot, target: root, targetResourcesLoaded: targetIsSession() };
           value = redactForModel(root, value);
         } else if (params.action === 'discover') {
           const query = String(params.query ?? '').trim();
@@ -159,7 +166,7 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
   // instance. Record entering and leaving in the session so a reload can
   // restore the mode (and its tool block) instead of silently dropping it
   // with the agent's tools half restored.
-  const record = active => pi.appendEntry?.(MODE_ENTRY, active ? { active: true, savedTools } : { active: false });
+  const record = active => pi.appendEntry?.(MODE_ENTRY, active ? { active: true, savedTools, root } : { active: false });
   const hide = () => {
     if (armed) record(false);
     armed = false;
@@ -178,7 +185,7 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
    * Black on yellow (plain ANSI; Pi's theme has no yellow background). */
   const showMode = (ctx) => {
     statusUi = ctx.ui;
-    ctx.ui?.setStatus?.('faur', `\x1b[30;43m ${MODE_STATUS} \x1b[0m`);
+    ctx.ui?.setStatus?.('faur', `\x1b[30;43m ${MODE_STATUS}${targetIsSession() ? '' : ` · ${root}`} \x1b[0m`);
   };
   /** Enter /faur mode: only the planner (and an active question dialog) stays. */
   const arm = (ctx, tools) => {
@@ -225,11 +232,12 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
       return;
     }
     if (suggestLeave) {
-      const choice = await ctx.ui.select('This is work for your agent, not a change to it.', ['Leave /faur and ask my agent', 'Stay in /faur']);
-      if (choice === 'Leave /faur and ask my agent') {
+      const choice = await ctx.ui.select('This is work for your agent, not a change to it.', [targetIsSession() ? 'Leave /faur and ask my agent' : 'Leave /faur', 'Stay in /faur']);
+      if (choice === 'Leave /faur and ask my agent' || choice === 'Leave /faur') {
         const request = lastRequest;
         leave(ctx);
-        if (request) pi.sendUserMessage(request, { deliverAs: 'followUp' });
+        if (!targetIsSession()) tell(ctx, `To run the selected agent, start Pi in ${root}, or invoke its MCP interface. This session is still the calling project's agent.`);
+        else if (request) pi.sendUserMessage(request, { deliverAs: 'followUp' });
         return;
       }
       stay(ctx);
@@ -254,13 +262,13 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
     if (armed && event.toolName !== 'faur_plan' && !(event.toolName === 'ask_user_question' && savedTools?.includes(event.toolName))) return { block: true, reason: 'Maintenance uses faur_plan and the available question dialog; operational tools are suspended while in /faur' };
   });
   // A preview file belongs to one open dialog; drop one a killed session left.
-  const dropPreview = () => { try { rmSync(join(root, PREVIEW_FILE), { force: true }); } catch { /* best effort */ } };
+  const dropPreview = () => { try { rmSync(safePath(root, PREVIEW_FILE), { force: true }); } catch { /* best effort */ } };
   // The extension registers this from its own session_start handler, where a
   // handler added now would miss the current event: it calls start() itself.
   const start = (event, ctx) => {
     dropPreview();
     const mode = (ctx.sessionManager?.getBranch?.() ?? []).filter(entry => entry.type === 'custom' && entry.customType === MODE_ENTRY).at(-1)?.data;
-    if (mode?.active && event?.reason === 'reload' && Array.isArray(mode.savedTools)) {
+    if (mode?.active && (!mode.root || resolve(mode.root) === root) && event?.reason === 'reload' && Array.isArray(mode.savedTools)) {
       arm(ctx, mode.savedTools);
       tell(ctx, 'Still in /faur after /reload; your agent\'s tools stay off. A proposal waiting for approval was dropped: ask for it again. /faur exit leaves.', 'warning');
     } else if (mode?.active) {
@@ -269,6 +277,7 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
     }
     // Report specialists that would start without their tools or skills.
     try {
+      if (!targetIsSession()) return;
       const check = launchCheck(root, parsedModel(readText(root, '.pi/system.yaml')), { registeredTools: pi.getAllTools?.().map(t => t.name) });
       if (!check.ok) tell(ctx, `Some agents would start without what they need:\n${check.problems.map(p => `- ${p.agent}: ${p.problem}`).join('\n')}`, 'warning');
     } catch { /* an invalid model is reported by the commands that use it */ }
@@ -276,7 +285,7 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
   pi.on('session_shutdown', () => { armed = false; pending = null; dropPreview(); });
   // Nothing here runs at agent run time: declared commands come from
   // pi-commands is pinned when declared commands are used.
-  const permissions = permissionsCommand(root);
+  const permissions = (args, ctx) => permissionsCommand(root)(args, ctx);
   /** Regenerate from system.yaml only after showing and approving the preview. */
   const rebuild = async (ctx) => {
     const plan = await withSkillPreviews(rebuildPlan(root), { fetcher: href => publicFetch(href) });
@@ -363,7 +372,7 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
     arm(ctx, pi.getActiveTools().filter(n => n !== 'faur_plan'));
     lastRequest = request;
     const workflow = readFileSync(new URL('../skills/faur/SKILL.md', import.meta.url), 'utf8').split('## Project maintenance workflow\n')[1];
-    pi.sendUserMessage(`${workflow}\n\nInitial response: ${review ? 'REVIEW ONLY; do not propose yet' : 'CHANGE PROPOSAL'}.\nUser request: ${request || 'review'}\n\nUse faur_plan inspect first. The command grants no Bash/write privileges. After an initial review, the person's replies can request a proposal in this same conversation; do not require another /faur request. The conversation continues until they apply or discard a proposal, or leave with /faur exit.`);
+    pi.sendUserMessage(`${workflow}\n\nMaintenance target: ${root}. The caller's working directory remains ${sessionRoot}. Do not execute the target agent or load its resources to maintain it.\n\nInitial response: ${review ? 'REVIEW ONLY; do not propose yet' : 'CHANGE PROPOSAL'}.\nUser request: ${request || 'review'}\n\nUse faur_plan inspect first. The command grants no Bash/write privileges. After an initial review, the person's replies can request a proposal in this same conversation; do not require another /faur request. The conversation continues until they apply or discard a proposal, or leave with /faur exit.`);
   };
   const command = async (args, ctx) => {
     try {
@@ -460,5 +469,14 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
     } catch (error) { hide(); tell(ctx, error.message, 'error'); }
   };
   command.start = start;
+  command.root = () => root;
+  command.active = () => armed;
+  command.selectRoot = next => {
+    next = resolve(next);
+    if (next === root) return;
+    if (armed || planning || pending) throw new Error('Leave the current maintenance session with /faur exit before switching agents; no proposal was discarded.');
+    root = next;
+    documents = new Map();
+  };
   return command;
 }

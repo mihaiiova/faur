@@ -26,6 +26,7 @@ Top-level keys (all others rejected):
 | `skills` | no | array | authored, packaged or vendored skills (→ `.pi/skills/*/`) |
 | `integrations` | no | object | MCP servers + env requirements |
 | `setup` | no | array | project setup checks and installs (see Setup checks) |
+| `mcpServer` | no | object | opt-in public stdio MCP interface to the lead (below); distinct from upstream `integrations.mcp` |
 | `packages` | no | array of `npm:`/`git:` specs | additional runtime extension packages (`pi-subagents` is always included; `pi-mcp-adapter` is rejected because it would replace Pi's built-in MCP; packaged skill sources are added automatically) |
 
 The **orchestrator is a top-level block**, not an `agents[]` entry. Pi has no
@@ -219,6 +220,56 @@ Allowed keys: `mcp` (array), `env` (array) and `cli` (array).
       tools: [read, write, "cli:create-issue"]
   ```
 
+### `mcpServer` (opt-in public operations)
+
+Requires an orchestrator. Allowed keys:
+
+- `projectRoot` (required): absolute path or path relative to the **agent source
+  folder**, e.g. `../..` for `.agents/jared` in a main project. No `~` expansion.
+  The directory must exist when starting the server. It is the tools' working
+  directory, not a filesystem containment boundary.
+- `tools` (required): explicit unique built-in names from `read`, `grep`, `find`,
+  `ls`, `write`, `edit`, `bash`. `[]` grants none. No browsing baseline is added;
+  developer tool lists, extensions, skills, specialists and upstream MCP are
+  never inherited by MCP execution.
+- `env` (optional): unique uppercase environment variable **names**, including
+  the model provider key. No values. Execution/configuration override names
+  (e.g. HOME, PATH, NODE_*, PI_*, FAUR_*) are refused. Every declared variable
+  must be set for invocation; undeclared environment variables are excluded.
+- `timeoutMs` (optional): integer 1–3600000, default 120000, covering child startup
+  and execution. Shutdown has a further 250ms SIGTERM grace before SIGKILL.
+- `operations` (required): 1–100 entries, each with only `name`, `description`,
+  `inputSchema`, `prompt`. Names match `^[a-z][a-z0-9_-]{0,63}$` and are unique.
+  Description and prompt are non-empty strings. `inputSchema` is an object-root
+  draft-07 JSON Schema compiled by Ajv in strict mode: unsupported keywords,
+  unknown formats and unresolved/remote refs are rejected. Inputs are validated
+  without coercion, defaults or mutation. Use `additionalProperties: false`
+  when undeclared inputs should be refused.
+
+Each binding runs the lead with its authored native prompt and the operation's
+`prompt`, followed by the validated arguments serialized as JSON data. It is
+not a command, specialist selection or automatic internal tool exposure.
+The lead's model and thinking level come from the orchestrator declaration;
+only Pi's built-in model catalog is available initially (no custom provider
+extensions, global logins or models.json). Declare provider key variables in
+`env`. Instructions to treat arguments as data remain advisory, not a security
+boundary against prompt injection.
+
+Generation adds `.faur-mcp/` (config, pinned npm manifest/lockfile, local
+registration guide and bundled Faur package assets) and a developer-only native
+extension `.pi/extensions/faur-mcp.ts`. Run `npm ci` in `.faur-mcp` first.
+The package remains readable and runs with no checkout links or global binaries.
+MCP source/definitions are derived, but every generated asset is hash-checked
+against `.faur-mcp/generated.json` before replacement: an edit conflicts instead
+of being overwritten. The manifest is an edit-preservation mechanism, not an
+integrity/security boundary. Native lead prompt ownership stays unchanged.
+Use `set` target `mcpServer` through the normal maintenance preview/apply path to
+change operations; a null value removes the optional interface. Retired assets
+are removed only when their recorded hashes match; installed node_modules is
+never deleted, and its nested ignore rule is retained. Finish active calls before editing/applying; restart/reconnect
+for changes to become visible. One call at a time per server; no queue, hot reload
+or cross-server coordination. See `docs/mcp-serving.md` in the Faur repository.
+
 ## 2. Validation rules
 
 `validateSystem(doc)` returns `{ ok, errors[] }`. Errors name the offending
@@ -239,8 +290,9 @@ path/key and the expected value. Rejected conditions:
 The skill name `faur` is reserved (it is the Faur skill) and cannot be declared in
 `skills[]`. Operational model edits use the structured operations of
 `/faur`, which reuse this validator and reject dangling references.
-The Faur version is the pinned package in `.pi/settings.json` (recorded in
-`.faur/build.json`), never part of this operational model. An explicit empty orchestrator `tools: []` stays empty; omitted tools request the browsing baseline. Lead defaultTools controls built-in tools; independently registered extension tools may remain active, and MCP exposure is configured separately.
+The generating Faur version is recorded in `.faur/build.json`, never part of
+this operational model. Ordinary projects pin no Faur; opt-in `mcpServer`
+projects carry bundled Faur package assets for hosting and local maintenance. An explicit empty orchestrator `tools: []` stays empty; omitted tools request the browsing baseline. Lead defaultTools controls built-in tools; independently registered extension tools may remain active, and MCP exposure is configured separately.
 
 `policies` is no longer accepted. Move MCP hide rules to `integrations.mcp[].config.excludeTools` and advisory instructions to prompts or skills. Review agent restrictions explicitly: narrower nonempty specialist allowlists cannot be represented, so do not silently replace them with the browsing baseline. Import and native adoption refuse omitted or narrower native tool lists when representing them would change access; review those lists before importing or adopting.
 
@@ -310,8 +362,8 @@ and reported). `faur validate` and `faur generate` reject them.
 6. **Idempotence:** `generate`/`modify` are pure functions of (model, disk) —
    same inputs produce the same result and never duplicate content.
 
-When pinned, the Faur package is the first entry of the derived `packages`
-list, pinned to the release that generated the project. Maintenance
+The optional MCP package bundle is separate from the native Pi `packages`
+list and its npm dependencies are locked in `.faur-mcp/package-lock.json`. Maintenance
 change proposals delete removed agent scaffolds only when intact, reject
 authored conflicts, and require separately confirmed drift reconciliation.
 The build record's declaration inventory identifies previously declared paths;

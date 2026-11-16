@@ -7,6 +7,7 @@ import { staleMentions } from './agent-context.mjs';
 import { loadYaml } from './yaml-loader.mjs';
 import { importSystem } from './import.mjs';
 import { isDeepStrictEqual } from 'node:util';
+import { mcpRecordedPaths, mcpDistributionSummary } from './mcp-project.mjs';
 import { managedPaths, generateProject, declarationInventory, intactScaffold } from './generate.mjs';
 import { effectiveCapabilities, checkCapabilities } from './capabilities.mjs';
 import { diffLines, changedLines, compactDiff, indent } from './diff.mjs';
@@ -674,7 +675,8 @@ export function planChange(root, operations, options = {}) {
     piPackages: settingsText === null ? (options.piPackages ?? []) : (JSON.parse(settingsText).packages ?? []),
     contextFiles: skippedContextFiles(root),
   };
-  const paths = [...new Set([...managedPaths(oldModel), ...managedPaths(model), ...(inventory?.scaffolds ?? [])])];
+  const mcpPaths = mcpRecordedPaths(readText(root, '.faur-mcp/generated.json'));
+  const paths = [...new Set([...managedPaths(oldModel), ...managedPaths(model), ...mcpPaths, '.faur-mcp/generated.json', ...(inventory?.scaffolds ?? [])])];
   const existing = Object.fromEntries(paths.map(p => [p, readText(root, p)]).filter(([,v]) => v !== null));
   const baseline = generateProject(oldModel, existing, opts);
   const drift = baseline.files.filter(f => ['.pi/settings.json', '.pi/mcp.json', '.pi/commands.json'].includes(f.path) && f.action === 'write').map(f => f.path);
@@ -779,10 +781,10 @@ export function planChange(root, operations, options = {}) {
       vendorModes[path] = file.executable ? 0o755 : 0o644;
     }
   }
-  const files = plan.files.filter(f => ['write', 'create'].includes(f.action));
+  const files = plan.files.filter(f => ['write', 'create', 'remove'].includes(f.action));
   const generatedModes = {};
   for (const f of files) {
-    writes[f.path] = f.content;
+    writes[f.path] = f.action === 'remove' ? null : f.content;
     const path = safePath(root, f.path);
     generatedModes[f.path] = existsSync(path) ? lstatSync(path).mode & 0o7777 : 0o666 & ~process.umask();
   }
@@ -913,7 +915,7 @@ export function planChange(root, operations, options = {}) {
   }
   // Removed capabilities must stop loading. Delete only fingerprint-intact
   // scaffolds; authored/edited files are a conflict, not a silent orphan.
-  for (const path of [...new Set([...managedPaths(oldModel), ...(inventory?.scaffolds ?? [])])].filter(p => !p.startsWith('.pi/skills/') && !managedPaths(model).includes(p))) {
+  for (const path of [...new Set([...managedPaths(oldModel), ...(inventory?.scaffolds ?? [])])].filter(p => !p.startsWith('.pi/skills/') && !p.startsWith('.faur-mcp/') && p !== '.pi/extensions/faur-mcp.ts' && !managedPaths(model).includes(p))) {
     if (existing[path] === undefined) continue;
     const scaffold = oldScaffolds.find(f => f.path === path)?.content;
     if (scaffold !== existing[path] && !((inventory?.scaffolds ?? []).includes(path) && intactScaffold(existing[path]))) throw new Error(`Authored removal conflict: ${path}; preserve or relocate it explicitly first`);
@@ -994,7 +996,12 @@ export function planChange(root, operations, options = {}) {
       modelDiff: diffLines(oldText, text),
       advisories: configurationAdvisories(model),
       ...(stale.length ? { staleMentions: { note: 'These instructions still mention a capability this change removes, so agents would keep reaching for it. Update them in the same proposal.', mentions: stale } } : {}),
-      files: files.map(f => ({ path: f.path, action: f.action, diff: diffLines(existing[f.path] ?? readText(root, f.path) ?? '', f.content) })),
+      files: files.map(f => {
+        const before = existing[f.path] ?? readText(root, f.path);
+        const after = f.action === 'remove' ? null : f.content;
+        const distribution = mcpDistributionSummary(f.path, before, after);
+        return { path: f.path, action: f.action, ...(distribution ? { distribution } : { diff: diffLines(before ?? '', after ?? '') }) };
+      }),
       ...(vendorCopies.length ? { vendoredSkills: vendorCopies.map(copy => ({ name: copy.name, source: copy.source, into: `${copy.dest}/`, files: Object.keys(copy.files) })) } : {}),
       capabilitiesDiff: diffLines(json(beforeCapabilities), json(afterCapabilities)),
       ...(skills.install.length || skills.remove.length ? { skills: {
@@ -1002,7 +1009,7 @@ export function planChange(root, operations, options = {}) {
         remove: skills.remove.map(name => existsSync(join(root, installedDir(name))) ? `${installedDir(name)}/` : `${name}: prune skills-lock.json entry`),
         how: `On apply, npx ${SKILLS_CLI} runs in a temporary project and its checked files and skills-lock.json are applied here. The CLI is not OS-sandboxed. Installed SKILL.md must match the preview. Skills can instruct agents to run programs; read them before approving.`,
       } } : {}),
-      restart: restart ? 'Takes effect after restarting Pi: packages change.' : 'Takes effect after /reload; no restart needed.',
+      restart: oldModel.mcpServer || model.mcpServer ? 'Finish active MCP calls before applying. Restart/reconnect the MCP server; reinstall with npm ci if dependencies changed. Reload developer Pi for native resource changes.' : restart ? 'Takes effect after restarting Pi: packages change.' : 'Takes effect after /reload; no restart needed.',
     },
   };
 }
@@ -1022,8 +1029,8 @@ function agentGrants(before, after) {
 /**
  * The few lines a person needs to decide on a change: what it writes and what
  * it grants or removes (tools, commands, MCP servers, packages, setup steps,
- * skills). Built from the redacted public preview; every changed line is in
- * approvalPreview.
+ * skills). Built from the redacted public preview; operational changed lines
+ * are in approvalPreview; bundled library/dependency assets use hashes and pins.
  */
 export function approvalSummary(root, plan) {
   if (plan.kind === 'schedule') {
@@ -1111,7 +1118,7 @@ export function publicChangePreview(root, plan) {
   const modelDiff = diffLines(loadYaml().stringify(model.before), loadYaml().stringify(model.after));
   const redactedChanges = model.changes.map(change => ({ file: '.pi/system.yaml', ...change }));
   const files = plan.preview.files.map(f => {
-    if (!f.path.endsWith('.json')) return f;
+    if (f.distribution || !f.path.endsWith('.json')) return f;
     const before = JSON.parse(readText(root, f.path) ?? 'null');
     const after = JSON.parse(plan.writes[f.path] ?? 'null');
     const pair = redactedDiffPair(before, after);
@@ -1121,7 +1128,8 @@ export function publicChangePreview(root, plan) {
   return redactForModel(root, { ...plan.preview, modelDiff, files, redactedChanges });
 }
 
-/** Show the complete redacted preview, or refuse rather than approve a truncated one. */
+/** Show the complete redacted operational preview and package-style distribution
+ * summaries, or refuse rather than approve a truncated one. */
 export function approvalPreview(root, plan) {
   // The structured redactor below catches credential fields, but final
   // redaction also masks known secrets and token-shaped values in free text.
@@ -1133,12 +1141,13 @@ export function approvalPreview(root, plan) {
   const preview = publicChangePreview(root, plan);
   if (preview.redactedChanges.length) throw new Error('Approval refused: changed sensitive values cannot be shown safely. Configure them outside Faur and reconcile the resulting native files explicitly; nothing applied.');
   const { modelDiff, files, ...details } = preview;
-  // Every changed line is shown; unchanged runs are elided to two lines of context.
+  // Every operational changed line is shown. Executable package distribution
+  // assets are explicitly approved by identity/hash and direct dependency pins.
   const written = [...new Set([...(modelDiff ? ['.pi/system.yaml'] : []), ...files.map(file => file.path)])];
   const text = [
     `Writes ${written.join(', ') || 'no files'}.${preview.restart ? ` ${preview.restart}` : ''}`,
     'Design diff (.pi/system.yaml):', compactDiff(modelDiff ?? ''),
-    ...files.flatMap(file => [`File: ${file.path} (${file.action})`, compactDiff(file.diff ?? '')]),
+    ...files.flatMap(file => [`File: ${file.path} (${file.action})`, file.distribution ? json(file.distribution) : compactDiff(file.diff ?? '')]),
     ...(preview.skills?.install ?? []).map(skill => `Install registry skill ${skill.name} from ${skill.source} into ${skill.into}`),
     ...(preview.skills?.how ? [preview.skills.how] : []),
     'Execution surface and other preview details:', json(details),

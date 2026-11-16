@@ -4,7 +4,7 @@ import { loadYaml } from './yaml-loader.mjs';
 import { validateSystem } from './validate.mjs';
 
 const collections = { agent: ['agents'], skill: ['skills'], mcp: ['integrations', 'mcp'], env: ['integrations', 'env'], cli: ['integrations', 'cli'] };
-const blocks = { orchestrator: ['orchestrator'], integrations: ['integrations'], packages: ['packages'] };
+const blocks = { orchestrator: ['orchestrator'], integrations: ['integrations'], packages: ['packages'], mcpServer: ['mcpServer'] };
 const safeName = (s) => typeof s === 'string' && /^[a-zA-Z0-9_-]+$/.test(s) && !['__proto__', 'constructor', 'prototype'].includes(s);
 // Removed in 0.36 (#75). Maintenance reads a design that still has them so
 // Faur can propose the replacing skills; the next approved change drops them.
@@ -61,7 +61,8 @@ export function changeModel(text, operations) {
     }
     if (o.target === 'policies') throw new Error('policies were removed: use integrations.mcp[].config.excludeTools for MCP exclusions and prompts or skills for advisory guidance; review specialist restrictions explicitly, since narrower nonempty allowlists cannot be represented');
     if (o.op === 'set' && Object.hasOwn(blocks, o.target)) {
-      put(blocks[o.target], o.value);
+      if (o.target === 'mcpServer' && o.value === null) doc.delete('mcpServer');
+      else put(blocks[o.target], o.value);
       continue;
     }
     if (o.op === 'assign' && safeName(o.name) && typeof o.model === 'string') {

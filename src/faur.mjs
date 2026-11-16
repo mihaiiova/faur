@@ -382,7 +382,8 @@ async function runReconcile(dir, dryRun, yes, command) {
   console.log(`${dryRun ? 'Planned changes (dry run — nothing written)' : 'Preview of changes to apply'} for ${systemPath}:`);
   for (const file of preview.files) {
     console.log(`  ${pad(file.action)} ${file.path}`);
-    if (file.diff) console.log(indent(file.diff, '    '));
+    if (file.distribution) console.log(indent(JSON.stringify(file.distribution, null, 2), '    '));
+    else if (file.diff) console.log(indent(file.diff, '    '));
   }
   printVendorPlan(vendor.copies);
   printRegistryPlan(plan.skills.install);

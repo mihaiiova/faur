@@ -54,9 +54,17 @@ change.
 
 Faur composes Pi's own resources: settings, agent files, skills, packages,
 extensions, MCP servers, sessions. It does not add another agent runtime,
-workflow engine, scheduler, plugin system or memory store, and generated
-projects do not load Faur at all. What an agent needs at run time comes from
-Pi and from the packages the project pins.
+workflow engine, scheduler, plugin system or memory store. Ordinary generated
+projects do not load Faur. Approved 2026-11-16: optional `mcpServer` projects
+bundle a thin Faur stdio adapter and local maintenance assets; Pi still owns
+all agent execution. See [MCP serving](mcp-serving.md). What an agent needs
+at run time comes from Pi and explicit pinned dependencies.
+
+Project-local agents may live in `.agents/<name>/` and be maintained from the
+main project's `/faur`, using their existing `.pi/system.yaml` as the identifier.
+There is no agent registry or extra ID. Selection reuses the same maker lifecycle
+without loading the selected project's runtime resources. See
+[project-local agents](project-local-agents.md).
 
 ## 3. Target users and reference use cases
 
@@ -190,7 +198,8 @@ Before adding anything, ask:
 
 - An agent runtime, workflow or graph engine, scheduler, plugin API,
   marketplace or memory database of our own.
-- Any run-time dependency of generated projects on Faur.
+- Mandatory run-time dependencies on Faur. Only the opt-in MCP hosting adapter
+  is an approved exception; ordinary and minimal projects remain unchanged.
 - Continuous synchronization between `system.yaml` and native files.
 - A hosted management platform, visual editor or always-on daemon.
 - Generated TypeScript extension code, unless no existing capability fits and

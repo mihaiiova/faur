@@ -1,0 +1,49 @@
+{
+  "projectRoot": "../..",
+  "tools": [
+    "read"
+  ],
+  "env": [
+    "AZURE_OPENAI_API_KEY",
+    "AZURE_OPENAI_BASE_URL"
+  ],
+  "timeoutMs": 10000,
+  "operations": [
+    {
+      "name": "audit",
+      "description": "Public audit",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "additionalProperties": false
+      },
+      "prompt": "audit the project"
+    },
+    {
+      "name": "review",
+      "description": "Public review",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "additionalProperties": false
+      },
+      "prompt": "review the project"
+    }
+  ],
+  "model": "azure/gpt-4.1-mini",
+  "thinking": "off"
+}

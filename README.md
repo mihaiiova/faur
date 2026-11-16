@@ -2,33 +2,37 @@
 
 **Design, generate, check, and revise specialized Pi agents.**
 
-Faur (formerly **Pi Agent Factory**) is a conversational development tool
+Faur (formerly **Pi Forge**) is a conversational development tool
 for specialized agents. You describe the outcome you want. Faur recommends the
 simplest agent that achieves it and generates it as an ordinary, project-local
 Pi project: an orchestrator, optional specialists, skills, packages, MCP
-integrations, commands, skills and permissions. It then keeps that agent
+integrations and declared commands. It then keeps that agent
 working as your needs change.
 
 **The specialized agent is the product. Pi is its runtime.** Faur composes
 Pi's own resources and adds no workflow engine or scheduler of its own. A
-project never pins Faur: declared commands use a separate
-package when needed; Faur does not provide MCP per-call approvals. It starts
-with `pi` in its folder.
+normal project pins no Faur: declared commands use a separate package when
+needed; Faur does not provide MCP per-call approvals. It starts with `pi` in
+its folder. Optional MCP-serving projects bundle Faur's thin adapter and local
+maintenance assets; Pi still owns agent execution.
 
 > **Direction (2026-11-02).** Faur is the maker; generated projects are
-> ordinary Pi projects that run with plain `pi`, with Faur uninstalled.
+> ordinary Pi projects that run with plain `pi`, with Faur uninstalled globally.
+> The optional project-local MCP interface is the approved hosting exception.
 > See the [product direction](docs/product-direction.md) and the
 > [migration plan](docs/architecture-audit.md#5-runtime-dependencies-and-the-migration).
 
 - [Product direction](docs/product-direction.md): what Faur is, how to judge
   changes, and its non-goals. This is the authoritative document.
-- [Roadmap](docs/roadmap.md): the current audit, gaps, milestones and issues.
+- [Documentation](https://faur.mightyagents.dev): installation, building agents,
+  running, maintenance and scheduling.
+- [Roadmap](docs/roadmap.md): current priorities and authoritative GitHub issues.
 - [AGENTS.md](AGENTS.md): engineering principles for anyone changing this
   repository.
 
 > **Rename:** Faur was formerly Pi Forge. Older projects are regenerated
 > into a new directory; review and manually reconcile their authored files.
-> See [migration](#no-faur-in-the-project).
+> See [migration](#no-faur-in-the-ordinary-project).
 
 ### Architecture in brief
 
@@ -36,9 +40,9 @@ with `pi` in its folder.
 you ──▶ /faur (builder, conversational)
           │  faur CLI: discover · validate · generate --dry-run · generate
           ▼
-   <project>/.pi/system.yaml   compact desired state (schema 1)
+   <project>/.pi/system.yaml   record of the agreed design (schema 1)
    <project>/.pi/…             native Pi files: settings, agents, skills, mcp.json, prompts
-   <project>/.faur/           build record, capability manifest, isolated Pi home
+   <project>/.faur/            maker build record and capability evidence
           │
           ▼
    pi, pi -p "/skill:…"   Pi runs the agent; /faur revises it
@@ -78,6 +82,41 @@ node src/faur.mjs generate <dir> --dry-run  # then without --dry-run
 node src/faur.mjs modify <dir> --dry-run
 ```
 
+### Manage project-local agents
+
+New independent agents default to `.agents/<name>/`; explicit locations remain
+supported. From the main project:
+
+```text
+/faur agents
+/faur                          # pick an agent
+/faur agent jared status
+/faur Update Jared’s review operation
+```
+
+Faur discovers direct children with `.pi/system.yaml`, not a new registry or ID.
+Maintenance keeps the existing preview/approval path and never loads the target
+agent's executable resources. See [project-local agents](docs/project-local-agents.md).
+
+### Expose an agent through MCP
+
+```text
+/faur Create Jared in .agents/jared and expose audit and review as MCP tools.
+```
+
+The optional `mcpServer` declaration defines public operations, JSON input
+schemas, prompt bindings, an explicit target root and separate runtime tools/env
+names. Faur generates a self-contained stdio server with bundled package assets
+and pinned, locked dependencies. Run `npm ci` in `.agents/jared/.faur-mcp`, then
+ask your coding agent to register it locally using its generated instructions.
+No global Pi/Faur is required for serving or local maintenance.
+
+Each call uses fresh Pi SDK execution. Timeout, cancellation and active-tool
+cleanup are enforced; configuration isolation is **not OS/filesystem isolation**.
+The first host is POSIX-only and uses Pi's built-in model catalog. Finish active
+calls before maintenance and restart/reconnect afterward; no hot reload.
+See [MCP serving](docs/mcp-serving.md) for installation, permissions and limits.
+
 ### Models: chosen per agent
 
 Nothing is hardcoded. Every agent — the orchestrator and each subagent — names
@@ -87,7 +126,7 @@ each use a different one, and any model can be changed later.
 
 ### Skills: chosen per agent, suggested from skills.sh
 
-The faur ships no skills of its own. When you set up a system, or add or
+Faur ships no domain skills of its own. When you set up a system, or add or
 change an agent, it searches the open skills registry ([skills.sh](https://skills.sh))
 for that agent's role and suggests a few candidates, with source, install count
 and page. It shows each skill's actual `SKILL.md` and files before you decide.
@@ -100,7 +139,7 @@ node src/faur.mjs search-skills seo audit
 node src/faur.mjs preview-skill coreyhaines31/marketingskills@seo-audit
 ```
 
-While designing, the Faur reads public pages you give it with
+While designing, Faur reads public pages you give it with
 `faur fetch <url>`: https only, public addresses, no credential-bearing URLs,
 and the result is marked as untrusted content. It does not search the web.
 
@@ -132,6 +171,15 @@ skills:
 
 Skills in the shared Agent Skills folder `~/.agents/skills/` also load for the
 orchestrator; subagents get only the skills listed for them.
+
+### Tools: browsing by default
+
+Faur adds `read`, `ls`, `find` and `grep` to every non-empty tool list and
+shows the additions in the change preview. Omitting `tools` requests that
+baseline; `tools: []` stays empty. `codemode` must be granted explicitly:
+it can reach other exposed tools, including inherited global MCP servers.
+The generator enforces the baseline, not OS isolation; actual tool access
+is governed by Pi and its packages.
 
 ### Tasks and document formats
 
@@ -250,16 +298,38 @@ Inside it, `/faur` is the one command:
 |---|---|
 | `/faur [request]` | Revise the agent, for example `/faur add a research specialist` or `/faur use a cheaper model for the writer`. When the turn ends with a proposal, Faur prompts you to **discuss** (the default), **apply** or **discard** it. Plain replies continue the conversation until you apply or discard, or leave with `/faur exit`. The mode survives `/reload` (a proposal waiting for approval is dropped); restarting Pi leaves it. Without a request, or with `review`, the first answer is a read-only review. |
 | `/faur check` | Validate `system.yaml`, compare the generated files with it, and run the launch check. |
-| `/faur status` | Agents and models, capabilities, and whether the project still pins Faur from an earlier release. |
+| `/faur status` | Agents, models, integrations and last capability-check status. |
 | `/faur sync` | Preview rebuilding the project with this Faur and apply only after confirmation. |
 | `/faur schedule status` | Inspect native Linux user-systemd timers and the last service process result, not task success. |
 | `/faur schedule stop <name>` / `remove <name>` | Preview and confirm disabling/cancelling a schedule, or removing its native units. |
 
-To create or change a schedule, ask `/faur run the progress-check skill daily at
-09:00 Europe/Bucharest with a 15-minute timeout`. Faur proposes native systemd
-units and asks before changing external state. Scheduling adds nothing to the
-agent schema or runtime; see [scheduling](docs/scheduling.md) for credentials,
-lingering, enforced timeout/overlap behavior, limitations and CLI usage.
+### Schedule a skill on Linux
+
+Ask `/faur run the progress-check skill daily at 09:00 Europe/Bucharest with
+a 15-minute timeout`. First agree what should happen to the result: a report,
+external delivery or explicitly no output, for example. That behavior belongs
+in the skill; needed skill or integration changes are approved separately.
+The skill must already exist locally before scheduling.
+
+Faur previews native **systemd user timers** and asks before changing external
+state. systemd runs plain Pi, without Faur or `system.yaml`. systemd enforces
+the wall-time timeout and process-group cancellation; `flock` prevents overlap
+between scheduled runs of the same project, not manual runs. There is no
+missed-run catch-up, retry, notification or task-success evaluator.
+
+The host needs Linux and a reachable systemd user manager. Running after logout
+or reboot needs host configuration (check `linger`); Faur never enables it or
+runs sudo. Your shell environment and project `.env` are not automatically
+loaded. Runs use ordinary Pi authentication and optionally an existing systemd
+`EnvironmentFile`; credentials remain accessible to agents and tools in these
+trusted runs. `--approve` permits project loading, not consequential commands:
+commands requiring interactive approval remain blocked unattended.
+
+stdout/stderr go to the user journal, not automatically to your agreed report
+destination. Status reports service process results, **not task success**.
+Scheduling adds no schema fields or runtime packages. See
+[scheduling](docs/scheduling.md) for host requirements, CLI operations,
+credentials, guarantees and recovery.
 
 Lower-level: `/faur env` and `/faur permissions [add | remove
 <name>]`. Headless sessions never apply a change.
@@ -297,9 +367,13 @@ in #70). That boundary
 is deferred until an agent needs it, and will be claimed only with
 adversarial evidence.
 
-#### No Faur in the project
+#### No Faur in the ordinary project
 
-A generated project pins no Faur package. Install Faur in your own Pi to
+Ordinary generated projects pin no Faur package. Optional `mcpServer` projects
+bundle Faur's adapter and developer maintenance assets instead; their npm
+runtime dependencies are locked separately. See [MCP serving](docs/mcp-serving.md).
+
+Install Faur in your own Pi to
 design and maintain projects; the projects run with Pi and the packages they
 declare, with Faur uninstalled. Updating Faur changes nothing in a project
 until you run `/faur sync` in it, which rebuilds the generated files with the
@@ -332,7 +406,20 @@ Projects predating Pi Forge need the same fresh regeneration.
 
 ```sh
 bash test/test.sh
+RUN_FAUR_MCP_TEST=1 node --test test/mcp-server.test.mjs
 ```
+
+The MCP gate installs into an independent temporary project and uses real Pi/MCP
+with a local deterministic model, not a paid provider. The default suite includes
+real Pi RPC checks for parent-project target selection and approval.
+
+### Documentation and website deployment
+
+In this checkout, `/skill:deploy` audits local documentation against the code,
+updates this README and the Faur pages/catalog in the sibling `mightyagents`
+repository, runs checks and builds, and deploys only the approved sites.
+Use `/reload` to discover the repository-local skill. A documentation-only
+refresh does not deploy or cut a release.
 
 ### Releasing
 
@@ -347,10 +434,10 @@ git clone https://github.com/mihaiiova/faur.git /path/to/faur
 pi install /path/to/faur
 ```
 
-`/faur` is then available in your Pi sessions. Generated projects do not pin
-Faur; they run with Pi and their own declared packages. To install a released
-Faur instead of a local checkout, use
-`pi install git:github.com/mihaiiova/faur@vX.Y.Z` with a release tag that includes the rename.
+`/faur` is then available in your Pi sessions. Ordinary generated projects do
+not pin Faur; opt-in MCP-serving projects bundle its hosting/maintenance assets.
+To install this release instead of a local checkout, use
+`pi install git:github.com/mihaiiova/faur@v0.40.0`.
 Faur pins its own packages in `package.json` under `pi.packages`.
 
 ## Personal Pi setup

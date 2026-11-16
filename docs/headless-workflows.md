@@ -4,6 +4,10 @@ Changed by #62 (2026-11-03): the `./run --workflow` runner is removed. A
 workflow is a skill, and Pi runs it in print or JSON mode. Generated projects
 contain no workflow logic.
 
+For the opt-in project-local MCP interface (explicit public operations,
+configuration-isolated fresh execution and process-group cancellation), see
+[MCP serving](mcp-serving.md). The plain-Pi contract below is unchanged.
+
 ## Invocation
 
 ```sh

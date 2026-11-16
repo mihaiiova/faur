@@ -470,7 +470,7 @@ test('Faur installed in the developer\'s Pi maintains a generated project and ad
     const notices = [];
     const command = session.extensionRunner.getCommand('faur');
     assert.match(command.description, /check \| status \| sync/);
-    await command.handler('check', { hasUI: true, ui: { notify: message => notices.push(message) } });
+    await command.handler('check', { hasUI: true, cwd: root, isProjectTrusted: () => true, ui: { notify: message => notices.push(message) } });
     assert.match(notices.join('\n'), /All checks passed|No missing capabilities/, 'inside a project /faur checks this agent');
   } finally { session.dispose(); }
 });
@@ -492,8 +492,8 @@ test('outside a Faur project, /faur designs a new agent and has nothing to check
     const commands = session.extensionRunner.getRegisteredCommands().map(c => c.name);
     assert.deepEqual(commands.filter(name => name === 'faur' || /factory/.test(name)), ['faur']);
     const notices = [];
-    await session.extensionRunner.getCommand('faur').handler('status', { hasUI: true, cwd: root, ui: { notify: message => notices.push(message) } });
-    assert.match(notices.join('\n'), /not a Faur project/i);
+    await session.extensionRunner.getCommand('faur').handler('status', { hasUI: true, cwd: root, isProjectTrusted: () => true, ui: { notify: message => notices.push(message) } });
+    assert.match(notices.join('\n'), /No Faur agent is selected/i);
   } finally { session.dispose(); }
 });
 

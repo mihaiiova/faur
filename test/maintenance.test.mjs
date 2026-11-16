@@ -88,6 +88,47 @@ function adapter(initialTools = ['read'], entries = []) {
   }, sessionManager: { getBranch: () => entries }, modelRegistry: { getAvailable: () => [] } };
   return { pi, Type, ctx, events, tools, commands, messages, notices, sent, entries, active: () => active, dialogs, editors, prompts, status, widgets, choose: (...c) => choices.push(...c), approve: () => { confirm = true; choices.push('Apply'); }, endTurn: (c = ctx) => events.agent_end({}, c) };
 }
+test('one maintenance controller switches targets only after exit and excludes caller execution evidence', async t => {
+  const first = project(t);
+  const second = project(t, { ...model, name: 'second-agent' });
+  const mock = adapter(['read', 'write']);
+  mock.pi.getAllTools = () => [{ name: 'caller_only' }];
+  mock.entries.push({ type: 'message', message: { role: 'toolResult', toolName: 'caller_only' } });
+  const command = registerMaintenance(mock.pi, mock.Type, first, { sessionRoot: dirname(first) });
+  await command('change the prompt', mock.ctx);
+  assert.equal(command.active(), true);
+  const tool = () => mock.tools.faur_plan;
+  await tool().execute('proposal', { action: 'propose', operations: JSON.stringify([{ op: 'set', target: 'orchestrator', value: { ...model.orchestrator, prompt: 'First only.' } }]) }, undefined, undefined, mock.ctx);
+  assert.throws(() => command.selectRoot(second), /no proposal was discarded/);
+  const inspect = JSON.parse((await tool().execute('inspect', { action: 'inspect' }, undefined, undefined, mock.ctx)).content[0].text);
+  assert.equal(inspect.pendingProposal.applied, false);
+  assert.deepEqual(inspect.executionEvidence, []);
+  assert.equal(inspect.maintenanceSession.targetResourcesLoaded, false);
+  assert.equal(inspect.maintenanceSession.target, first);
+  assert.match(mock.messages.at(-1), new RegExp(first));
+  await command('exit', mock.ctx);
+  command.selectRoot(second);
+  assert.equal(command.root(), second);
+  assert.deepEqual(mock.active(), ['read', 'write']);
+  await command('change this agent', mock.ctx);
+  const switched = JSON.parse((await tool().execute('inspect2', { action: 'inspect' }, undefined, undefined, mock.ctx)).content[0].text);
+  assert.equal(switched.parsedModel.name, 'second-agent');
+  assert.equal(switched.maintenanceSession.target, second);
+});
+
+test('maintenance startup never cleans a preview through a symlinked state directory', t => {
+  const root = project(t);
+  const outside = mkdtempSync(join(tmpdir(), 'faur-external-state-'));
+  t.after(() => rmSync(outside, { recursive: true, force: true }));
+  const preview = join(outside, 'proposal.md');
+  writeFileSync(preview, 'Unrelated authored preview');
+  rmSync(join(root, '.faur'), { recursive: true });
+  symlinkSync(outside, join(root, '.faur'), 'dir');
+  const mock = adapter();
+  registerMaintenance(mock.pi, mock.Type, root).start({}, mock.ctx);
+  assert.equal(readFileSync(preview, 'utf8'), 'Unrelated authored preview');
+});
+
 test('schedule proposals use the Pi approval dialog, reject stale native files and cannot apply headless', { skip: process.platform !== 'linux' || requireResult('systemd-analyze', ['--version']).status !== 0 || !existsSync(`/run/user/${process.getuid()}`) }, async t => {
   const root = project(t);
   const home = join(root, 'config');

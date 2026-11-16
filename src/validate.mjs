@@ -8,6 +8,7 @@
  * See `schema.md` for the field-by-field schema and validation rules.
  */
 
+import { mcpServerErrors } from './mcp-server.mjs';
 import { THINKING_LEVELS, isModelRef } from "./models.mjs";
 import { PACKAGE_SOURCE_RE, skillSourceKind } from "./skill-sources.mjs";
 import { isMisplacedPlaceholder } from "./cli-tools.mjs";
@@ -18,7 +19,7 @@ const KEBAB_CASE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const TOP_LEVEL_KEYS = [
   "schema", "name", "description", "orchestrator",
-  "agents", "skills", "integrations", "packages", "setup",
+  "agents", "skills", "integrations", "packages", "setup", "mcpServer",
 ];
 const ORCHESTRATOR_KEYS = ["name", "description", "prompt", "model", "thinking", "tools"];
 const AGENT_KEYS = [
@@ -164,6 +165,8 @@ export function validateSystem(doc) {
   checkUnknownKeys(doc, TOP_LEVEL_KEYS, "document", errors);
   if (doc.policies !== undefined) errors.push("document.policies was removed: move MCP hide rules to integrations.mcp[].config.excludeTools and advisory text to prompts or skills; review agent tool restrictions explicitly, since narrower nonempty allowlists cannot be represented");
   checkSetup(doc.setup, 'document.setup', errors);
+  errors.push(...mcpServerErrors(doc.mcpServer));
+  if (doc.mcpServer !== undefined && !isPlainObject(doc.orchestrator)) errors.push('document.mcpServer requires an orchestrator');
 
   if (doc.schema !== 1) {
     errors.push(
