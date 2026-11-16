@@ -128,6 +128,18 @@ interview again; reuse the design and the conversation, then:
    integrations. Generate in the requested folder (e.g. `.agents/jared`), then
    point the user to `.faur-mcp/README.md` for npm ci and client-specific local
    registration. Never write global client configuration or embed secrets.
+   If the user explicitly wants an existing Pi Codex subscription instead of an
+   API key, opt into `mcpServer.auth` with `mode: pi-subscription`, provider
+   `openai-codex` matching the model, and an `authFileEnv` host-only name. The user
+   configures that variable to their existing private auth.json; never copy it,
+   request token values or put the source variable in runtime env grants. Explain
+   that the trusted host's SDK store reads the shared file internally, only
+   selected request auth reaches the worker, and graceful shutdown must allow
+   native refresh persistence. Check the pinned runtime's exact catalog with
+   `--check-auth`; `--resolve` explicitly permits OAuth refresh, not a model call.
+   Do not equate configured/login presence, resolved auth and exercised calls;
+   never fall back to API billing or run a live subscription smoke test without
+   separate permission.
 4. **Validate** with `faur validate <dir>`.
 5. **Preview** with `faur generate <dir> --dry-run`, and summarize what will
    be created — agents with their exact models and tools, skills with their

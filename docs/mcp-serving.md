@@ -46,8 +46,9 @@ object to instructions for a fresh execution of the lead. The lead's authored
 `.pi/APPEND_SYSTEM.md` is shared with interactive use; its generated developer
 capability section is excluded. This first slice deliberately does not load
 skills, specialists, arbitrary provider extensions or upstream MCP at runtime.
-The runtime uses Pi's built-in model catalog and explicitly declared provider
-key variables; it does not use global OAuth logins or custom models.json.
+The runtime uses Pi's built-in model catalog and, by default, explicitly declared
+provider key variables; it does not inherit global OAuth logins or models.json.
+Optional subscription mode delegates only selected Codex auth, as below.
 
 ## Install and register
 
@@ -73,6 +74,81 @@ global configuration. Use an absolute Node executable and an absolute path to
 caller working directory is safe: source paths are entry-point-relative and
 `projectRoot` is agent-source-relative. Store secrets outside committed config,
 using the client's supported environment mechanism. Faur never embeds values.
+
+## Reuse a Pi Codex subscription login (since v0.41.0)
+
+The isolated API-key default is unchanged. Choose an `openai-codex/<model-id>` model
+and explicitly opt in:
+
+```yaml
+mcpServer:
+  # projectRoot, tools, operations as above
+  env: []
+  auth:
+    mode: pi-subscription
+    provider: openai-codex
+    authFileEnv: JARED_PI_AUTH_FILE
+```
+
+In the MCP client's **local server environment**, set `JARED_PI_AUTH_FILE` to the
+absolute path of an existing owner-only Pi auth.json owned by the current user.
+Only the variable name is generated; do not commit its value or credential
+contents. This host-only variable cannot also be a runtime `env` grant. Do not
+copy auth.json, share the whole Pi home, or inherit all environment variables.
+Sign in with `/login openai-codex` in a normal Pi session using that store before
+invoking MCP. Requests never initiate interactive login.
+
+**Accepted trust boundary:** the long-lived host uses Pi's public getAuth API
+and native store. The SDK internally parses the shared file, including other
+provider entries. Only selected resolved Codex request auth crosses private Node
+IPC to the worker; no refresh token or auth-file path reaches it. The worker uses
+public native-provider auth composition and keeps its temporary home, explicit
+tools and resource loader. It loads no global settings, extensions, skills,
+models.json, upstream MCP or unrelated credentials. It never switches to the
+separately billed `openai` provider. See the
+[SDK investigation and decision](research/pi-subscription-auth.md).
+
+Native file locking and the under-lock expiry recheck coordinate normal Pi and
+multiple hosts using the same resolved store, including symlink aliases (tested
+with Pi 1.5.2). Cancellation stops lock waiting; a refresh already started must
+finish/persist under Pi's own timeout, even after its caller cancels. Refresh
+therefore belongs in the host, not the killable worker. Invocation timeout and
+cleanup remain bounded as before; **graceful host shutdown drains credential
+writes**. Allow at least 20 seconds in the client's stop grace before force-kill.
+If the client cannot honor that grace, do not use shared-login mode with it.
+SIGKILL, compromised locks, disk failures or ambiguous remote refresh outcomes
+can still require re-login, as with ordinary Pi. Loss-free/crash-durable token
+rotation is not guaranteed.
+
+From the agent source directory:
+
+```sh
+node .faur-mcp/faur/mcp/host.mjs --check-auth
+node .faur-mcp/faur/mcp/host.mjs --check-auth --resolve
+```
+
+The first explicitly checks local login/catalog metadata without refresh. The
+second permits native OAuth resolution/refresh (and credential persistence),
+but neither makes a model call or initiates login. An entry's presence is not
+authentication; local resolution does not prove provider/model acceptance.
+
+The exact model must resolve in the pinned isolated catalog. Developer discovery
+may see a newer cached model or a global override; neither is inherited. Catalog
+incompatibility fails before auth access: choose a compatible model or update/
+regenerate the pinned runtime. Missing source/login, non-private storage and
+expired/failed refresh produce fixed actionable errors, not raw SDK causes.
+There is no model/provider/API-billing fallback.
+
+`/faur check` does not automatically read global credentials or refresh. It
+separates **configured**, **last resolved locally**, and **last successful model
+invocation**. Ignored `.faur-mcp/auth-evidence.json` holds only config/source
+fingerprints and timestamps, never paths, credentials, prompts or outputs. This
+is historical/advisory evidence, not a current-auth or task-success guarantee or
+a tamper-proof attestation. Configuration/source changes invalidate old evidence.
+Exact selected tokens are redacted from final answers as defense in depth, not
+OS isolation or general exfiltration prevention against trusted same-user tools.
+No live credentials/provider calls are used in tests; a live subscription smoke
+test requires separate permission.
 
 ## Maintain
 
@@ -122,7 +198,9 @@ the locked dependencies changed. Git is the rollback mechanism.
   Invocation input and worker output are bounded to 1 MiB.
 - Runtime uses an explicit custom SDK resource loader and in-memory settings and
   sessions. It does not discover project/global settings, extensions, packages,
-  skills, parent instructions or developer credential files. Its home and agent
+  skills or parent instructions. By default it reads no developer credentials;
+  optional subscription mode supplies selected request auth through the broker.
+  Its home and agent
   directory are temporary; only explicitly named variables plus a small fixed
   execution environment reach it. No provider catalog network refresh occurs.
 - This is **enforced configuration isolation**, not OS isolation. Tools still
@@ -163,7 +241,7 @@ code paths. There is no snapshot/publishing/version-selection system.
 
 ```sh
 bash test/test.sh
-RUN_FAUR_MCP_TEST=1 node --test test/mcp-server.test.mjs
+RUN_FAUR_MCP_TEST=1 node --test test/mcp-server.test.mjs test/mcp-auth.test.mjs
 npm audit --prefix mcp
 ```
 

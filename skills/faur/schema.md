@@ -236,6 +236,16 @@ Requires an orchestrator. Allowed keys:
   the model provider key. No values. Execution/configuration override names
   (e.g. HOME, PATH, NODE_*, PI_*, FAUR_*) are refused. Every declared variable
   must be set for invocation; undeclared environment variables are excluded.
+- `auth` (optional; since v0.41.0): explicit Pi subscription delegation. Allowed
+  keys are only `mode: pi-subscription`, `provider: openai-codex`, and
+  `authFileEnv: <UPPERCASE_VARIABLE_NAME>` (all required). The provider must match
+  the orchestrator model provider. The named host-only variable supplies an
+  absolute path to an existing owner-only Pi auth.json; no path/value is embedded
+  in the declaration, and the variable must not appear in runtime `env` grants.
+  Execution/configuration override names such as HOME/PATH/PI_* are rejected;
+  FAUR_* host-only names are allowed. Omit `auth` for the unchanged isolated
+  API-key mode. No automatic source discovery, login, API-key/provider fallback,
+  auth-file copying or global Pi resource inheritance is enabled.
 - `timeoutMs` (optional): integer 1–3600000, default 120000, covering child startup
   and execution. Shutdown has a further 250ms SIGTERM grace before SIGKILL.
 - `operations` (required): 1–100 entries, each with only `name`, `description`,
@@ -250,10 +260,30 @@ Each binding runs the lead with its authored native prompt and the operation's
 `prompt`, followed by the validated arguments serialized as JSON data. It is
 not a command, specialist selection or automatic internal tool exposure.
 The lead's model and thinking level come from the orchestrator declaration;
-only Pi's built-in model catalog is available initially (no custom provider
-extensions, global logins or models.json). Declare provider key variables in
-`env`. Instructions to treat arguments as data remain advisory, not a security
-boundary against prompt injection.
+only Pi's built-in model catalog is available (no custom provider extensions or
+models.json). A model discovered in the developer session must also resolve in
+this pinned isolated catalog; mismatch fails explicitly before auth-store access.
+By default, declare provider key variables in `env`; no global login is read.
+The opt-in `auth` mode instead delegates Codex auth to the trusted host's native
+Pi getAuth/credential-store implementation. Its SDK internally reads the shared
+credential file, including unrelated entries, but only selected resolved request
+auth crosses private IPC to the worker. No refresh token or source path reaches
+the worker. Native file locking coordinates normal Pi and multiple host processes.
+An invocation timeout/cancel kills its worker as before; graceful host shutdown
+must drain a started refresh (allow at least 20 seconds in the client). Hard kill,
+disk failure and ambiguous remote refresh outcomes have ordinary Pi's limitations,
+not a loss-free/crash-durable guarantee. This is not OS isolation from trusted
+same-user tools. Instructions to treat arguments as data remain advisory, not a
+security boundary against prompt injection.
+
+Generated registration instructions include `--check-auth` (local metadata and
+catalog only) and `--check-auth --resolve` (explicit permission to resolve/refresh
+OAuth, never a model call). `/faur check` does not silently read global credentials
+or refresh; it distinguishes configuration, historical local auth resolution and
+historical successful invocation. Those timestamps/fingerprints live only in
+ignored `.faur-mcp/auth-evidence.json`, with no token values. They are not current
+provider acceptance, task success or tamper-proof attestations. A live subscription
+smoke test requires separate permission.
 
 Generation adds `.faur-mcp/` (config, pinned npm manifest/lockfile, local
 registration guide and bundled Faur package assets) and a developer-only native

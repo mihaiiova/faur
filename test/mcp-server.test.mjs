@@ -43,6 +43,27 @@ test('public MCP declaration is strict, explicit and validates full JSON Schema'
   }
 });
 
+test('subscription auth is explicit, Codex-only, provider-bound and never passes its source variable to tools', () => {
+  const model = design();
+  model.orchestrator.model = 'openai-codex/gpt-6-sol';
+  model.mcpServer.env = [];
+  model.mcpServer.auth = { mode: 'pi-subscription', provider: 'openai-codex', authFileEnv: 'JARED_PI_AUTH_FILE' };
+  assert.deepEqual(validateSystem(model), { ok: true, errors: [] });
+  for (const mutate of [
+    m => { m.orchestrator.model = 'openai/gpt-6-sol'; },
+    m => { m.orchestrator.model = 12; },
+    m => { m.mcpServer.auth.provider = 'openai'; },
+    m => { m.mcpServer.auth.mode = 'api-key'; },
+    m => { m.mcpServer.auth.authFileEnv = 'HOME'; },
+    m => { m.mcpServer.auth.authFileEnv = '/tmp/auth.json'; },
+    m => { m.mcpServer.auth.access = 'never-inline-a-token'; },
+    m => { m.mcpServer.env = ['JARED_PI_AUTH_FILE']; },
+  ]) {
+    const invalid = structuredClone(model); mutate(invalid);
+    assert.equal(validateSystem(invalid).ok, false);
+  }
+});
+
 test('opt-in assets are self-contained, idempotent and edit-protected; minimal is unchanged', () => {
   const model = design();
   const minimal = { ...model }; delete minimal.mcpServer;
@@ -97,7 +118,7 @@ test('CLI first build is approvable; stale bundle removal is hash-protected and 
     assert.ok(approvalPreview(root, removal).length < 100000);
     applyChange(root, removal, true);
     assert.equal(existsSync(join(root, '.faur-mcp/faur/mcp/host.mjs')), false);
-    assert.equal(readFileSync(join(root, '.faur-mcp/.gitignore'), 'utf8'), 'node_modules/\n');
+    assert.equal(readFileSync(join(root, '.faur-mcp/.gitignore'), 'utf8'), 'node_modules/\nauth-evidence.json\n');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
