@@ -116,8 +116,18 @@ interview again; reuse the design and the conversation, then:
    the assumptions. Ask only about decisions that cannot safely be inferred or
    that materially change functionality, cost, external permissions or
    security — and ask those before writing `system.yaml`.
-3. **Construct** `.pi/system.yaml` from the primitives (`orchestrator`,
-   `agents`, `skills`, `integrations`, `packages`).
+3. **Choose the project folder:** new independent agents default to
+   `.agents/<name>/` under the calling project. Honor an explicitly requested
+   location instead; never move or overwrite an existing agent implicitly.
+   `.pi/system.yaml` identifies a Faur project, with no extra ID or registry.
+   **Construct** `.pi/system.yaml` from the primitives (`orchestrator`,
+   `agents`, `skills`, `integrations`, `packages`). When explicitly asked to
+   expose the agent as an MCP server, add `mcpServer` (schema.md): selected
+   public operations, explicit target projectRoot relative to the agent folder,
+   runtime tools and env variable names. This is distinct from upstream MCP
+   integrations. Generate in the requested folder (e.g. `.agents/jared`), then
+   point the user to `.faur-mcp/README.md` for npm ci and client-specific local
+   registration. Never write global client configuration or embed secrets.
 4. **Validate** with `faur validate <dir>`.
 5. **Preview** with `faur generate <dir> --dry-run`, and summarize what will
    be created — agents with their exact models and tools, skills with their
@@ -130,6 +140,30 @@ interview again; reuse the design and the conversation, then:
 6. **Get explicit confirmation of that preview** before writing any file, then
    run `faur generate <dir> --yes`. "Build it" agrees to the design; it is not
    approval to write files unseen.
+
+## Project-local agents
+
+From a main project, `/faur agents` lists direct `.agents/<folder>/` children
+containing `.pi/system.yaml`. Bare `/faur` offers a picker; a named request such
+as `/faur Update Jared’s review operation` selects a matching folder name.
+For deterministic targeting use `/faur agent jared <request>` (quote names
+containing spaces). Ambiguity requires selection, never a guess; without UI,
+use the explicit form. Creation requests default to `.agents/<name>` and may
+still specify another location. `.agents/skills` is not an agent, unrelated
+folders are ignored, symlinks are refused, and discovery does not recurse.
+
+Maintenance from the main project uses the existing validation/preview/approval
+path for the selected folder. It never changes the caller's working directory
+or loads the target's extensions, skills, upstream MCP servers or tool grants.
+Do not claim caller tools or execution history verify target capabilities.
+Finish or leave the active maintenance conversation with `/faur exit` before
+switching targets; never discard its pending proposal implicitly. `/reload`
+restores an active selected target and its maintenance tool restrictions.
+Running an agent is separate: start Pi in its folder or use its public MCP
+interface. Inside an existing agent folder, ordinary `/faur` still maintains
+that project; explicit Create/Build/Design/New requests start an independent
+project instead. Use Add/Change (or `agent <name>`) to revise an existing one. Discovery/maintenance requires trusting the main project;
+initial design remains available without loading untrusted project resources.
 
 ## Technical decisions
 
@@ -312,8 +346,10 @@ See `../../docs/scheduling.md` for the complete contract and CLI recipe.
   `~/.agents/skills/` (and `.agents/skills/` in the project and its parents)
   and parent-folder `AGENTS.md` files load for the orchestrator;
   subagents get only the skills listed for them.
-- **Maintain** — a generated system never pins Faur; it is maintained from a
-  Faur installed in the user's own Pi. `/faur <request>`
+- **Maintain** — an ordinary generated system pins no Faur; it is maintained
+  from Faur installed in the user's own Pi. Opt-in `mcpServer` systems bundle
+  Faur and a developer-only local extension; install with npm ci as documented
+  in `.faur-mcp/README.md`. `/faur <request>`
   inspects, discovers and previews a structured model change; when the turn
   ends, Faur prompts the human to discuss, apply or discard it, and plain
   replies continue the conversation until then (`/faur exit` leaves). `/faur review`
@@ -458,6 +494,7 @@ when this turn ends. Don't do the work, and don't tell them to type
      switches one agent's (or the orchestrator's) model. Offer only models from
      the inspected available-model list; thinking is optional and null removes it.
    - {"op":"set","target":"orchestrator","value":{...}} replaces the block.
+   - {"op":"set","target":"mcpServer","value":{...}} replaces the optional public MCP interface (see schema.md). Use an explicit target projectRoot, runtime tools and env names; do not inherit developer tools. Each operation binds validated JSON arguments to a prompt for the lead. Finish active calls before applying, then restart/reconnect the server. Never register globally or assume a client configuration format.
      Also supported: integrations, packages. Use these to change
      tools, integrations or declared dependencies without a generic path-based
      mutation language.
@@ -567,7 +604,11 @@ them to start a new /faur request. Ask only if the intended change is unclear.
 
 ## Faur tooling lifecycle
 
-Generated projects pin no Faur, so there is no release to move. /faur sync
+Ordinary generated projects pin no Faur, so there is no release to move.
+Opt-in MCP projects bundle Faur assets and locked npm dependencies; regenerate
+with the desired maker version, finish active calls, reinstall dependencies if
+changed, and restart the server. Do not silently overwrite edited bundle files.
+/faur sync
 previews regeneration with the Faur running it and asks for confirmation,
 including when only text changes. Projects made by Pi Forge must be freshly
 regenerated and their authored files manually reconciled. /faur check validates

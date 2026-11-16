@@ -1,3 +1,4 @@
+import { mcpProjectPaths, mcpProjectFiles } from './mcp-project.mjs';
 import { configurationAdvisories } from './advisories.mjs';
 /**
  * generate — materialize a `system.yaml` model into a single-agent Pi project.
@@ -366,8 +367,16 @@ function readmeBody(model, packages) {
     ] : []),
     '## Maintain',
     '',
-    'This project runs on Pi alone and pins no Faur package. Maintain it from',
-    'your own Pi with Faur installed: run `pi` in this folder and use',
+    ...(model.mcpServer ? [
+      'This project exposes selected public operations through MCP. See',
+      '`.faur-mcp/README.md` for installation, local registration, runtime limits',
+      'and the local Pi maintenance command. Bundled Faur is developer-only;',
+      'MCP execution uses a separate explicit capability profile.',
+      'Run `pi` in this folder and use',
+    ] : [
+      'This project runs on Pi alone and pins no Faur package. Maintain it from',
+      'your own Pi with Faur installed: run `pi` in this folder and use',
+    ]),
     '`/faur <request>` to propose a change (discuss, apply or discard it when the',
     'turn ends), `/faur check` to verify the agent, `/faur status` to summarize',
     'it and `/faur permissions` to list, add or remove declared commands. Without',
@@ -456,6 +465,7 @@ export function managedPaths(model) {
   if (hasEnv(model)) paths.push(".env.example");
   if (cliEntries(model).length) paths.push(COMMANDS_CONFIG);
   for (const agent of agentEntries(model)) paths.push(agentPath(agent));
+  paths.push(...mcpProjectPaths(model));
   return paths;
 }
 
@@ -486,6 +496,7 @@ export function generateProject(model, existingFiles = {}, opts = {}) {
     ...(hasEnv(model) ? [authoredFile(".env.example", "plain", envBody(model), existing[".env.example"])] : []),
     ...(cliEntries(model).length ? [derivedFile(COMMANDS_CONFIG, commandsConfig(model), existing[COMMANDS_CONFIG])] : []),
     ...agentFiles(model, existing),
+    ...mcpProjectFiles(model, existing),
   ];
 
   files.sort((a, b) => a.path.localeCompare(b.path));

@@ -11,6 +11,12 @@ scenarios are checked by reading transcripts. Each has an input, what a passing
 reply does, and what fails it. Example wording is illustrative; recommendations
 must come from real discovery results, never invented models, tools or skills.
 
+For choosing or revising independent agents from their main project, see
+[project-local agents](project-local-agents.md): `/faur agents`, the picker and
+`/faur agent <name> <request>` reuse these conversations at the selected root.
+Explicit Create/Build/Design/New requests design a new independent agent in
+`.agents/<name>` unless the user specifies another location.
+
 ## 1. Vague idea
 
 **Input.** `/faur I want something that helps with my newsletter.`

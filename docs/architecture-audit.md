@@ -1,5 +1,11 @@
 # Architecture audit (v0.26.0)
 
+**2026-11-16 amendment:** the historical maker-only migration below remains the
+ordinary-project baseline. The user approved one opt-in exception: project-local
+agents exposed through MCP bundle Faur's thin adapter and developer maintenance
+assets. Pi's SDK owns execution; no separate Agent Kit or orchestration runtime.
+See [MCP serving](mcp-serving.md) for the current boundary and verification.
+
 > **2026-11-09 backlog reconciliation:** This is a dated architecture record,
 > not an active implementation queue. Runtime result/artifact/MCP-adapter
 > proposals #43/#44/#46 and scenario proposals #38/#39 are closed as not planned
