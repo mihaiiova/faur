@@ -165,7 +165,7 @@ export function validateSystem(doc) {
   checkUnknownKeys(doc, TOP_LEVEL_KEYS, "document", errors);
   if (doc.policies !== undefined) errors.push("document.policies was removed: move MCP hide rules to integrations.mcp[].config.excludeTools and advisory text to prompts or skills; review agent tool restrictions explicitly, since narrower nonempty allowlists cannot be represented");
   checkSetup(doc.setup, 'document.setup', errors);
-  errors.push(...mcpServerErrors(doc.mcpServer));
+  errors.push(...mcpServerErrors(doc.mcpServer, doc.orchestrator?.model));
   if (doc.mcpServer !== undefined && !isPlainObject(doc.orchestrator)) errors.push('document.mcpServer requires an orchestrator');
 
   if (doc.schema !== 1) {

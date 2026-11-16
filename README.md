@@ -115,6 +115,13 @@ Each call uses fresh Pi SDK execution. Timeout, cancellation and active-tool
 cleanup are enforced; configuration isolation is **not OS/filesystem isolation**.
 The first host is POSIX-only and uses Pi's built-in model catalog. Finish active
 calls before maintenance and restart/reconnect afterward; no hot reload.
+API-key authentication remains isolated by default. To reuse an existing Pi
+Codex subscription login, explicitly declare `mcpServer.auth` with
+`mode: pi-subscription`, `provider: openai-codex`, and an `authFileEnv` host-only
+variable naming your private Pi auth.json. The trusted host uses native Pi
+refresh/locking; only selected request auth reaches the worker, never the whole
+Pi home. Allow at least 20 seconds for graceful host shutdown to drain refresh
+persistence; do not enable this mode for clients that cannot honor that grace.
 See [MCP serving](docs/mcp-serving.md) for installation, permissions and limits.
 
 ### Models: chosen per agent
@@ -437,7 +444,7 @@ pi install /path/to/faur
 `/faur` is then available in your Pi sessions. Ordinary generated projects do
 not pin Faur; opt-in MCP-serving projects bundle its hosting/maintenance assets.
 To install this release instead of a local checkout, use
-`pi install git:github.com/mihaiiova/faur@v0.40.0`.
+`pi install git:github.com/mihaiiova/faur@v0.41.0`.
 Faur pins its own packages in `package.json` under `pi.packages`.
 
 ## Personal Pi setup

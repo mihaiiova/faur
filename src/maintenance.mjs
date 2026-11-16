@@ -987,6 +987,7 @@ export function planChange(root, operations, options = {}) {
         addedPackages: afterCapabilities.packages.filter(p => !beforeCapabilities.packages.includes(p)),
         changedMcp: changedEntries(oldModel.integrations?.mcp ?? [], model.integrations?.mcp ?? []),
         changedCli: changedEntries(oldModel.integrations?.cli ?? [], model.integrations?.cli ?? []),
+        ...(JSON.stringify(oldModel.mcpServer?.auth) !== JSON.stringify(model.mcpServer?.auth) ? { hostingAuth: { before: oldModel.mcpServer?.auth ?? 'isolated-api-key', after: model.mcpServer?.auth ?? 'isolated-api-key' } } : {}),
         setupCommands: setupSteps(model).filter(step => !setupSteps(oldModel).some(old => JSON.stringify(old) === JSON.stringify(step))),
         toolsAndAgentsChanged: JSON.stringify([withBaselineTools(oldModel).orchestrator, withBaselineTools(oldModel).agents]) !== JSON.stringify([withBaselineTools(model).orchestrator, withBaselineTools(model).agents]),
         warning: 'Setup checks execute shell commands automatically; installs execute after confirmation. Packages and stdio MCP servers execute code at next launch. MCP URLs expose data to their operators. Approval authorizes this declared execution surface.',
@@ -1059,6 +1060,10 @@ export function approvalSummary(root, plan) {
     const verb = !m.before ? 'Adds' : !m.after ? 'Removes' : 'Changes';
     const where = m.after?.config?.url ?? m.after?.config?.command;
     lines.push(`${verb} MCP server ${m.name}${where ? ` (${where})` : ''}.`);
+  }
+  if (surface.hostingAuth) {
+    lines.push(`Changes MCP hosting authentication: ${JSON.stringify(surface.hostingAuth.before)} → ${JSON.stringify(surface.hostingAuth.after)}.`);
+    if (surface.hostingAuth.after?.mode === 'pi-subscription') lines.push('The trusted host broker reads the shared Pi credential store internally; only selected Codex request auth reaches the isolated worker. Native refresh may extend graceful host shutdown. No API-key fallback.');
   }
   for (const p of surface.addedPackages ?? []) lines.push(`Adds package ${p}.`);
   for (const step of surface.setupCommands ?? []) lines.push(`Adds setup step: ${step.description ?? step.install ?? 'a check'}.`);

@@ -21,6 +21,7 @@ import { leadTools } from './asking.mjs';
 import { envNames } from './runtime.mjs';
 import { REPLACES_BUILTIN } from './deps.mjs';
 import { homedir } from 'node:os';
+import { mcpHostingStatus } from './mcp-auth-status.mjs';
 
 const BUILTIN = new Set(['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls']);
 
@@ -73,7 +74,9 @@ export function checkProject(root, { registeredTools, mcpTools, env = process.en
     if (!env[name]) launch.push(`integrations.env ${name}: not set in this environment; export it, or load .env with direnv, before starting the agent`);
   }
   launch.push(...hostConflicts(root, doc, { ...(hostAgentDir ? { agentDir: hostAgentDir } : {}), mcpCommand }));
-  return { ok: consistency.length || launch.length ? false : runSetupChecks ? true : null, validation, consistency, launch, advisories: configurationAdvisories(doc), ...(!runSetupChecks ? { setupChecks: 'not verified' } : {}) };
+  const mcpHosting = mcpHostingStatus(root, doc, { env });
+  if (mcpHosting && !mcpHosting.configured) launch.push(`MCP hosting: ${mcpHosting.fix}`);
+  return { ok: consistency.length || launch.length ? false : runSetupChecks ? true : null, validation, consistency, launch, ...(mcpHosting ? { mcpHosting } : {}), advisories: configurationAdvisories(doc), ...(!runSetupChecks ? { setupChecks: 'not verified' } : {}) };
 }
 
 /**
@@ -132,6 +135,10 @@ export function checkAgent(root, options = {}) {
   if (!liveMcp) mcpEvidence = previous?.mcpEvidence?.servers ?? [];
   const mcpTimestamp = liveMcp ? timestamp : previous?.mcpEvidence?.timestamp;
   const capabilities = [];
+  if (checks.mcpHosting) {
+    const hosting = checks.mcpHosting;
+    capabilities.push({ agent: 'MCP host', name: 'hosting-authentication', provider: `${hosting.provider} (${hosting.mode})`, status: hosting.configured ? 'not verifiable' : 'missing', fix: `Configured: ${hosting.configured}; authenticated: ${hosting.authenticated}; exercised: ${hosting.exercised}. ${hosting.fix}` });
+  }
   const commands = new Map(cliEntries(model).map(c => [c.name, c]));
   const skills = new Map((model.skills ?? []).map(s => [s.name, s]));
   for (const agent of [model.orchestrator, ...(model.agents ?? [])]) {
