@@ -444,7 +444,7 @@ pi install /path/to/faur
 `/faur` is then available in your Pi sessions. Ordinary generated projects do
 not pin Faur; opt-in MCP-serving projects bundle its hosting/maintenance assets.
 To install this release instead of a local checkout, use
-`pi install git:github.com/mihaiiova/faur@v0.41.0`.
+`pi install git:github.com/mihaiiova/faur@v0.41.1`.
 Faur pins its own packages in `package.json` under `pi.packages`.
 
 ## Personal Pi setup

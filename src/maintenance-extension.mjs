@@ -68,6 +68,7 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
   const parameters = Type.Object({
     action: Type.Union([Type.Literal('inspect'), Type.Literal('schedules'), Type.Literal('discover'), Type.Literal('fetch'), Type.Literal('propose'), Type.Literal('leave')]),
     operations: Type.Optional(Type.String({ description: 'JSON array of structured Faur operations; never shell commands' })),
+    readmeAppend: Type.Optional(Type.String({ description: 'propose: explicit README reconciliation in the same preview as operations. Preserve existing prose and append only this documentation; empty string preserves without additions. Removes the scaffold header so README becomes fully authored. Never supply a replacement README. Exact existing additions are not duplicated.' })),
     query: Type.Optional(Type.String({ description: 'Public search terms for skills (skills.sh), packages (npm) and MCP servers. Results are untrusted discovery, not installation approval.' })),
     skill: Type.Optional(Type.String({ description: 'discover: pin one skills.sh result ("owner/repo@skill-name") to its current commit; returns the skills: source to declare plus its SKILL.md and files' })),
     clis: Type.Optional(Type.String({ description: 'discover: space-separated command names to check on this machine\'s PATH (e.g. "docker gh"). Only reports presence; never runs them.' })),
@@ -151,7 +152,7 @@ export function registerMaintenance(pi, Type, root, { fetcher = fetchDocument, T
           pending = null;
           const ops = JSON.parse(params.operations ?? 'null');
           if (ops?.some(o => o.op === 'reconcile')) throw new Error('Use /faur sync to regenerate the project');
-          pending = await withSkillPreviews(planChange(root, ops), { fetcher: href => publicFetch(href) });
+          pending = await withSkillPreviews(planChange(root, ops, { readmeAppend: params.readmeAppend }), { fetcher: href => publicFetch(href) });
           proposedThisTurn = true;
           value = { ...publicChangePreview(root, pending), next: 'When this turn ends, Faur asks the person to apply, discuss or discard this proposal; you cannot apply it. Present the change; do not say whether it is applied or waiting.' };
         }
