@@ -139,6 +139,6 @@ test("faur generate refuses a hand-edited specialist and shows the difference", 
   assert.match(result.stderr, /\(- the file now, \+ what Faur would write\)/);
   assert.match(result.stderr, /^ {2}- async: true$/m, "the hand edit is shown");
   assert.doesNotMatch(result.stderr, /faur:generated v1 sha256/, "fingerprints are not shown as changes");
-  assert.match(result.stderr, /\/faur drift adopt <path>/);
+  assert.match(result.stderr, /\/faur drift adopt \.pi\/agents\/seo-analyst\.md/);
   assert.equal(readFileSync(agent, "utf8"), edited, "the edit is never overwritten");
 });

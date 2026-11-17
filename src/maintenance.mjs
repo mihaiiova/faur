@@ -212,6 +212,7 @@ export function inspectProject(root) {
       const content = readText(root, p);
       return [p, p.endsWith('.json') && content !== null ? json(redacted(JSON.parse(content))) : content];
     })),
+    readme: { path: resolve(root, 'README.md'), content: readText(root, 'README.md'), reconciliation: 'propose readmeAppend to preserve the existing README and append only relevant documentation (empty string keeps it without additions). Approval removes the scaffold marker, making README fully authored. No README drift adoption is supported.' },
     // Local skills are the developer's files; revisions propose a whole new file.
     localSkills: Object.fromEntries((model.skills ?? []).filter(skill => !skill.source).map(skill => [`.pi/skills/${skill.name}/SKILL.md`, readText(root, `.pi/skills/${skill.name}/SKILL.md`)])),
     subagentRuns: subagentRuns(root),
@@ -631,7 +632,7 @@ export function restartNeeded(root, writes) {
 }
 export function planChange(root, operations, options = {}) {
   if (Array.isArray(operations) && operations.some(op => op?.target === 'schedule')) {
-    if (operations.length !== 1) throw new Error('A schedule change must be a separate proposal');
+    if (operations.length !== 1 || options.readmeAppend !== undefined) throw new Error('A schedule change must be a separate proposal');
     return planSchedule(root, operations[0]);
   }
   assertNativeJson(root);
@@ -712,12 +713,36 @@ export function planChange(root, operations, options = {}) {
     plan.files[index] = { path, content, action: content === existing[path] ? 'none' : 'write' };
     plan.unrepresentedAgent = extra;
   }
+  // A deliberately narrow reconciliation: append documentation, never merge or
+  // replace authored prose. Removing the obsolete scaffold header transfers the
+  // whole README to authored ownership; future generation then leaves it alone.
+  // This remains a normal planned file, covered by the same diff, approval,
+  // stale-file checks and rollback as the accompanying configuration changes.
+  if (options.readmeAppend !== undefined) {
+    if (typeof options.readmeAppend !== 'string') throw new Error('readmeAppend must be a string (empty means preserve without additions)');
+    const current = existing['README.md'];
+    if (current === undefined) throw new Error(`Cannot reconcile missing ${resolve(root, 'README.md')}`);
+    const body = current.replace(/^<!-- faur:generated v1 sha256=[0-9a-f]{64} -->\r?\n/, '');
+    const addition = options.readmeAppend.trim();
+    const separator = body.endsWith('\n\n') ? '' : body.endsWith('\n') ? '\n' : '\n\n';
+    const content = !addition || body.includes(addition) ? body : `${body}${separator}${addition}\n`;
+    const index = plan.files.findIndex(file => file.path === 'README.md');
+    plan.files[index] = { path: 'README.md', content, action: content === current ? 'none' : 'write' };
+  }
   const conflicts = plan.files.filter(f => f.action === 'conflict');
   if (conflicts.length) {
     // Show what differs so the developer can decide; never overwrite.
     const bare = text => (text ?? '').replace(/\n?<!-- faur:generated v1 sha256=[0-9a-f]{64} -->\n?/g, '\n').replace(/\n+$/, '');
-    const shown = conflicts.map(f => `${f.reason ? `${f.path}: ${f.reason}` : f.path}${typeof f.desired === 'string' && bare(f.desired) !== bare(f.content) ? `\n  (- the file now, + what Faur would write)\n${indent(changedLines(bare(f.content), bare(f.desired)), '  ')}` : ''}`);
-    throw new Error(`Authored file conflicts (nothing applied): ${conflicts.map(f => f.path).join(', ')}\n${shown.join('\n')}\nTo keep the edit, adopt it (/faur drift adopt <path>, for a marked prompt or specialist) or change system.yaml to match; to discard it, delete the file and generate again.`);
+    const shown = conflicts.map(f => {
+      const path = resolve(root, f.path);
+      const resolution = f.path === 'README.md'
+        ? 'In /faur, inspect the README and propose the same operations with readmeAppend containing only the new documentation (or an empty string to preserve without additions). Review the combined diff and explicitly approve, discuss or discard. README drift adoption is not supported.'
+        : f.path === '.pi/APPEND_SYSTEM.md' || /^\.pi\/agents\/[^/]+\.md$/.test(f.path)
+          ? `For supported marked prompts, preview /faur drift adopt ${f.path} or /faur drift reconcile ${f.path} adopt=<fields>; unsupported edits are refused and preserved. You can also revise or discard the proposal.`
+          : 'Revise or discard the proposal; automatic reconciliation is not supported for this file. The authored content is preserved.';
+      return `${path}${f.reason ? `: ${f.reason}` : ''}${typeof f.desired === 'string' && bare(f.desired) !== bare(f.content) ? `\n  (- the file now, + what Faur would write)\n${indent(changedLines(bare(f.content), bare(f.desired)), '  ')}` : ''}\n${resolution}`;
+    });
+    throw new Error(`Authored file conflicts (nothing applied): ${conflicts.map(f => resolve(root, f.path)).join(', ')}\n${shown.join('\n')}`);
   }
   const oldScaffolds = generateProject(oldModel, {}, opts).files;
   const newScaffolds = generateProject(model, {}, opts).files;
@@ -975,6 +1000,7 @@ export function planChange(root, operations, options = {}) {
     registryExpected: registrySignature(registrySnapshot(root, [...skills.install.map(s => s.name), ...skills.remove])),
     expected: fingerprints(root, [...paths, ...Object.keys(writes)]),
     preview: {
+      ...(options.readmeAppend !== undefined ? { readmeReconciliation: { path: resolve(root, 'README.md'), note: 'Preserve existing prose and append only the proposed documentation, skipping an exact existing addition. Remove the scaffold header: README becomes fully authored and future generation leaves it unchanged. No automatic merge or replacement.' } } : {}),
       reconciliation: drift,
       nativeDrift: settingsText === null ? [] : nativeDrift(root, oldModel),
       nativeUnrepresented: settingsText === null ? [] : nativeUnrepresented(root, oldModel, JSON.parse(settingsText), existing['.pi/mcp.json'] === undefined ? {} : JSON.parse(existing['.pi/mcp.json'])),

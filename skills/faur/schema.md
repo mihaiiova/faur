@@ -373,6 +373,19 @@ and reported). `faur validate` and `faur generate` reject them.
    unrelated. Faur also refuses nested negation rules along required `.pi`
    paths and declared integration secret paths, even if unrelated. The append is shown in
    dry runs and change previews, and repeating it is a no-op.
+   **README reconciliation in `/faur`:** `faur_plan` inspection includes the
+   absolute README path and redacted content. A `propose` call may carry
+   `readmeAppend` alongside its operations: only new documentation, or an empty
+   string to preserve without additions. Faur preserves the existing prose,
+   skips an exact already-present addition, and removes the scaffold header so
+   README becomes fully authored. Future generation leaves it untouched.
+   The combined configuration/README diff requires explicit approval; the
+   existing stale-file check and checked-write rollback cover the whole plan.
+   Writes use per-file atomic replacement and best-effort synchronous rollback,
+   not crash-safe multi-file transactions or isolation from concurrent readers.
+   Discarding applies nothing. This is not automatic semantic merging and does
+   not authorize overwriting other authored conflicts. README drift adoption
+   is not supported; no fingerprint editing or file deletion is required.
    **Local skill files** are never generated or regenerated. Faur writes one
    only as part of an approved change that carries its `content`, with the
    same preview and stale-file check as other files; otherwise it leaves them

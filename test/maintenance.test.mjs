@@ -88,6 +88,119 @@ function adapter(initialTools = ['read'], entries = []) {
   }, sessionManager: { getBranch: () => entries }, modelRegistry: { getAvailable: () => [] } };
   return { pi, Type, ctx, events, tools, commands, messages, notices, sent, entries, active: () => active, dialogs, editors, prompts, status, widgets, choose: (...c) => choices.push(...c), approve: () => { confirm = true; choices.push('Apply'); }, endTurn: (c = ctx) => events.agent_end({}, c) };
 }
+const mobbinOps = [
+  { op: 'set', target: 'integrations', value: { mcp: [{ name: 'mobbin', config: { url: 'https://api.mobbin.com/mcp' } }] } },
+  { op: 'set', target: 'orchestrator', value: { ...model.orchestrator, tools: ['read', 'mcp'] } },
+];
+const mobbinNote = '## Mobbin\n\nOfficial MCP: https://api.mobbin.com/mcp. Authentication is configured separately.\n';
+function customReadme(root) {
+  const text = readText(root, 'README.md') + '\nCustom Codex authentication, native delegation, Widgetbook and storyboard instructions.\n';
+  writeFileSync(join(root, 'README.md'), text);
+  return text.replace(/^<!-- faur:generated v1 sha256=[0-9a-f]{64} -->\n/, '');
+}
+
+test('README reconciliation preserves authored prose, previews MCP and is repeatable', t => {
+  const root = project(t);
+  const body = customReadme(root);
+  const before = snapshot(root);
+  assert.throws(() => planChange(root, mobbinOps), error => {
+    assert.ok(error.message.includes(join(root, 'README.md')));
+    assert.match(error.message, /readmeAppend/);
+    assert.doesNotMatch(error.message, /\/faur drift adopt|delete the file/);
+    return true;
+  });
+  const plan = planChange(root, mobbinOps, { readmeAppend: mobbinNote });
+  assert.deepEqual(snapshot(root), before, 'preview never writes');
+  const preview = approvalPreview(root, plan);
+  assert.match(preview, /README.md/);
+  assert.match(preview, /\.pi\/mcp.json/);
+  assert.match(preview, /Official MCP/);
+  assert.throws(() => applyChange(root, plan), /approval/i);
+  assert.deepEqual(snapshot(root), before, 'unapproved reconciliation writes nothing');
+  applyChange(root, plan, true);
+  assert.equal(readText(root, 'README.md'), body + '\n' + mobbinNote);
+  assert.equal(readJson(root, '.pi/mcp.json').mcpServers.mobbin.url, 'https://api.mobbin.com/mcp');
+  const applied = snapshot(root);
+  applyChange(root, planChange(root, mobbinOps, { readmeAppend: mobbinNote }), true);
+  assert.deepEqual(snapshot(root), applied, 'same documentation and operation are a no-op');
+  applyChange(root, rebuildPlan(root), true);
+  assert.equal(readText(root, 'README.md'), applied['README.md'], 'regeneration respects authored ownership');
+});
+
+test('README reconciliation rejects stale previews before writing anything', t => {
+  const root = project(t);
+  customReadme(root);
+  const plan = planChange(root, mobbinOps, { readmeAppend: mobbinNote });
+  writeFileSync(join(root, 'README.md'), readText(root, 'README.md') + 'A later edit.\n');
+  const before = snapshot(root);
+  assert.throws(() => applyChange(root, plan, true), /changed since preview: README.md/);
+  assert.deepEqual(snapshot(root), before);
+});
+
+test('README reconciliation can preserve without additions and append to an unmarked file', t => {
+  const root = project(t);
+  const body = customReadme(root);
+  applyChange(root, planChange(root, mobbinOps, { readmeAppend: '' }), true);
+  assert.equal(readText(root, 'README.md'), body);
+  const inspect = inspectProject(root);
+  assert.equal(inspect.readme.content, body);
+  applyChange(root, planChange(root, mobbinOps, { readmeAppend: mobbinNote }), true);
+  assert.equal(readText(root, 'README.md'), body + '\n' + mobbinNote);
+  assert.throws(() => planChange(root, mobbinOps, { readmeAppend: {} }), /readmeAppend must be a string/);
+  rmSync(join(root, 'README.md'));
+  assert.throws(() => planChange(root, mobbinOps, { readmeAppend: mobbinNote }), /Cannot reconcile missing .*README.md/);
+});
+
+test('README and MCP writes roll back together on a synchronous apply failure', t => {
+  const root = project(t);
+  customReadme(root);
+  const before = snapshot(root);
+  const plan = planChange(root, mobbinOps, { readmeAppend: mobbinNote });
+  assert.throws(() => applyWrites(root, plan.writes, plan.expected, true, {
+    write: (root, path, content) => {
+      atomicWrite(root, path, content);
+      if (path === 'README.md') throw new Error('Injected README write failure');
+    },
+  }), /Injected README write failure/);
+  assert.deepEqual(snapshot(root), before);
+});
+
+test('README reconciliation cannot authorize other authored conflicts', t => {
+  const root = project(t);
+  customReadme(root);
+  writeFileSync(join(root, '.pi/APPEND_SYSTEM.md'), readText(root, '.pi/APPEND_SYSTEM.md').replace('Coordinate research.', 'Custom instructions.'));
+  const before = snapshot(root);
+  const ops = [...mobbinOps, { op: 'set', target: 'orchestrator', value: { ...model.orchestrator, tools: ['read', 'mcp'], prompt: 'A different designed prompt.' } }];
+  assert.throws(() => planChange(root, ops, { readmeAppend: mobbinNote }), /Authored file conflicts/);
+  assert.deepEqual(snapshot(root), before);
+});
+
+test('README reconciliation is available in /faur and discard changes no project files', async t => {
+  const root = project(t);
+  const body = customReadme(root);
+  const mock = adapter();
+  const faurCommand = registerMaintenance(mock.pi, mock.Type, root);
+  await faurCommand('add Mobbin', mock.ctx);
+  const tool = params => mock.tools.faur_plan.execute('id', params, undefined, undefined, mock.ctx);
+  const inspect = JSON.parse((await tool({ action: 'inspect' })).content[0].text);
+  assert.ok(inspect.readme.content.includes(body));
+  assert.equal(inspect.readme.path, join(root, 'README.md'));
+  const before = snapshot(root);
+  await tool({ action: 'propose', operations: json(mobbinOps), readmeAppend: mobbinNote });
+  mock.choose('Discard');
+  await mock.endTurn();
+  // The preview dialog may persist its own disposable artifact, not project changes.
+  const after = snapshot(root);
+  delete after[PREVIEW_FILE];
+  assert.deepEqual(after, before);
+  await faurCommand('add Mobbin', mock.ctx);
+  await tool({ action: 'propose', operations: json(mobbinOps), readmeAppend: mobbinNote });
+  mock.approve();
+  await mock.endTurn();
+  assert.equal(readText(root, 'README.md'), body + '\n' + mobbinNote);
+  assert.ok(mock.prompts.some(prompt => prompt.title.includes('Official MCP')));
+});
+
 test('one maintenance controller switches targets only after exit and excludes caller execution evidence', async t => {
   const first = project(t);
   const second = project(t, { ...model, name: 'second-agent' });

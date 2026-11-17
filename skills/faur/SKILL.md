@@ -529,6 +529,20 @@ when this turn ends. Don't do the work, and don't tell them to type
    directory must be deleted explicitly before its declaration is removed.
    Failed validation/conflicts mean nothing was applied. Never delete edited
    authored files to work around a conflict; explain and ask how to preserve it.
+   README reconciliation: inspect returns `readme.path` (absolute) and its
+   redacted `content`. For an edited README conflict, or to document a new
+   integration in an authored README, retry the same `propose` operations with
+   the optional `readmeAppend` string containing **only the new documentation**,
+   never a replacement README. Use `readmeAppend: ""` to preserve without adding
+   text. Preserve existing authentication/delegation/project-specific guidance;
+   explain any contradictory instructions rather than silently overriding them.
+   The combined preview keeps existing prose, appends the addition unless that
+   exact text already exists, and removes the old scaffold header: README becomes
+   fully authored and future generation leaves it alone. Apply requires the
+   person's explicit approval and checks that README has not changed since
+   preview; discarding cancels the whole proposal. This is append-only, not a
+   general merge; rewriting contradictory prose is not supported. Never suggest
+   `/faur drift adopt README.md`, deleting README, or editing its fingerprint.
    Inspections redact credential-shaped values. Never write `[redacted]` back to
    the model. Prefer targeted operations that leave hidden values untouched; ask
    the user to convert any affected literal credentials to environment references.
