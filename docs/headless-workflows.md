@@ -5,7 +5,8 @@ workflow is a skill, and Pi runs it in print or JSON mode. Generated projects
 contain no workflow logic.
 
 For the opt-in project-local MCP interface (explicit public operations,
-configuration-isolated fresh execution and process-group cancellation), see
+fresh native execution in the agent source folder and bounded process-group
+cancellation, not strict configuration or filesystem isolation), see
 [MCP serving](mcp-serving.md). The plain-Pi contract below is unchanged.
 
 ## Invocation
@@ -35,12 +36,16 @@ pi --approve -p "/skill:<workflow> <request>"     # plain pi
 
 | Mode | Success | Failure |
 |---|---|---|
-| `-p` | exit 0; the final answer on stdout | exit 1; the error on stderr, stdout empty (a provider error is retried first) |
-| `--mode json -p` | JSONL events ending with `agent_end` (final messages, usage) and `agent_settled` | **exit 0**; the last assistant message in `agent_end` has `stopReason: "error"` and `errorMessage` (Pi 1.5.0; `headless-workflow.test.mjs`) |
+| `-p` | exit 0; the final answer on stdout | nonzero for a final `error`, `aborted` or `length` stop; diagnostics on stderr. `length` also prints its partial answer, so stdout is not necessarily empty |
+| `--mode json -p` | LF-delimited JSON events, including authoritative `message_end` and final `agent_settled` | an assistant error/abort does **not** itself cause a nonzero exit; inspect the final assistant's `stopReason` and `errorMessage`. A thrown invocation error can exit nonzero |
 
-In JSON mode a caller must read `stopReason`, not the exit code, to detect
-a failed run. The exit code reports the run, not the task: a workflow whose test failed
-still exits 0. A caller reads the task outcome from the answer (for example a
+This matches Pi 1.5.2's native CLI contract; the provider-error behavior is also
+covered by `headless-workflow.test.mjs`. In JSON mode, use `message_end` for the
+completed message and wait for `agent_settled`: `agent_end` can be followed by
+recovery or queued work. Streaming `message_update` records are deltas, not full
+message snapshots. Inspect `stopReason`, not exit code alone, for run failure.
+A successful process is not task success: an agent reporting a failed test can
+still exit 0. A caller reads the task outcome from the answer (for example a
 first line `Verdict: FAIL` that a document format requires).
 
 ## Approval

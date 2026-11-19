@@ -79,7 +79,8 @@ can actually call depend on Pi and its packages; a list is not OS isolation.
 Pi loads the project's `AGENTS.md` (and `AGENTS.md` files in parent folders)
 into the orchestrator's prompt by itself. Generation
 warns about files from outside the project. They are instructions sent to the
-model; treat them as untrusted input. Specialists do not receive them.
+model; treat them as untrusted input. Specialist project context follows native
+per-agent inheritance settings, including `inheritProjectContext`.
 
 ### Prompts and the generated "What you can use" section
 
@@ -457,6 +458,6 @@ setup:
     needsRoot: false
 ```
 
-Alternatively use `check: { file: path }`. Checks run automatically during generation, checks and headless workflow startup. **Command checks execute shell code with the user's permissions and may have side effects or access secrets. Only use trusted project declarations.** Do not put literal credentials in setup commands; use environment references. Install commands run only after confirmation via `/faur setup` or `faur setup <dir> --yes`; `needsRoot` commands are printed for manual execution. Headless workflows never install.
+Alternatively use `check: { file: path }`. Applied CLI generation, Faur capability checks and setup inspection can run these checks automatically. Plain Pi headless launches do not add a Faur setup preflight. **Command checks execute shell code with the user's permissions and may have side effects or access secrets. Only use trusted project declarations.** Do not put literal credentials in setup commands; use environment references. Install commands run only after confirmation via `/faur setup` or `faur setup <dir> --yes`; `needsRoot` commands are printed for manual execution. Headless workflows never install.
 
 MCP and CLI integrations may declare `secretsFile: .faur/service-secrets.env`. Paths must be project-relative, use only letters, digits, `_`, `-`, `.`, and `/`, and contain no `.` or `..` components or symlinks. To protect case-insensitive filesystems, reserved paths are rejected regardless of case: `.faur`, `.pi`, `data`, `.env`, `.env.example`, `run`, `README.md`, `data/knowledge/.gitkeep`, `.faur/build.json`, `.faur/capabilities.json`, `.faur/check.json`, and `.faur/permission-requests.json`; all paths under `.pi/` or `.faur/pi-home/`; and any `.git` or `.gitignore` path component. Faur adds an anchored gitignore entry and creates the missing file with mode 0600 without replacing existing content. Before applying, Faur conservatively refuses any negation rule in a nested `.gitignore` along the secret file's directory path, even if unrelated; resolve it explicitly. Root negations are handled as described in the `.gitignore` exception above. Existing files must be regular, private, and untracked/ignored; Faur reports problems rather than changing them. Configure declared `integrations.env` values outside Faur; never send secrets to the model. The integration must be configured to read its secrets file; Faur does not automatically load it. Git ignore cannot undo committed secrets. Path checks are not a defense against hostile concurrent filesystem changes.

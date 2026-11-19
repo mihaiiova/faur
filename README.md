@@ -2,6 +2,9 @@
 
 **Design, generate, check, and revise specialized Pi agents.**
 
+Current release: [v0.42.0](https://github.com/mihaiiova/faur/releases/tag/v0.42.0)
+— native-agent MCP serving, without modified Pi packages.
+
 Faur (formerly **Pi Forge**) is a conversational development tool
 for specialized agents. You describe the outcome you want. Faur recommends the
 simplest agent that achieves it and generates it as an ordinary, project-local
@@ -104,35 +107,58 @@ agent's executable resources. See [project-local agents](docs/project-local-agen
 /faur Create Jared in .agents/jared and expose audit and review as MCP tools.
 ```
 
-The optional `mcpServer` declaration binds public JSON-Schema operations to
-fresh native Pi sessions, with an explicit target root and environment grants.
-Source instructions, skills, templates, specialists, extensions, packages,
-commands and upstream MCP load through published unmodified Pi 1.5.2. Native
-cwd remains the **source S**; each operation supplies the absolute target T and
-validated JSON arguments. Target file work needs absolute paths or shell cd T:
-this is advisory, not automatic rebasing or a sandbox. Ordinary ancestor discovery
-and native child inheritance/resource policies apply; source-local memory/files
-are shared, so keep project-specific state under T. No second tool profile exists.
-Only bundled maker maintenance opts out; authored extensions load normally.
+Faur can generate a local stdio MCP server so another coding agent can call your
+agent's named operations, such as `audit` or `review`:
 
-**Amendment 2026-11-19:** independent normal registry npm ci and explicit native
-package installation are tested; no unpublished API, tarball or upstream change
-is required. Minimal projects remain unchanged. No global Pi/Faur is needed.
-Register locally using generated instructions; never embed credentials.
-Native MCP connects on session_start and waits according to direct/deferred
-policy; startup alone is not all-server readiness. Verify actual tools.
+```text
+Claude Code / Codex / another MCP client
+                  │ public operation + validated JSON arguments
+                  ▼
+       Faur-generated external MCP server
+                  │ fresh native Pi session
+                  ▼
+       Your agent in its own folder
+       instructions · skills · specialists · commands
+                  │ optional connections it uses
+                  ▼
+          Mobbin / other MCP services
+```
 
-Explicit subscription mode (`auth.mode: pi-subscription`, provider
-`openai-codex`, `authFileEnv` naming a private existing Pi auth.json) gives
-trusted native lead, specialists and tools direct access to the selected store.
-This supersedes the lead-only broker: no credential isolation is claimed.
-Pi owns refresh/locking; forced termination can interrupt persistence and require
-re-login. No automatic login/global auth discovery/API-billing fallback.
+These are two different interfaces: `mcpServer.operations` declares what your
+agent **offers to callers**; `integrations.mcp` declares the services your agent
+**uses**. Faur does not automatically expose every internal tool publicly.
 
-Timeout/cancellation, bounds and fresh sessions remain enforced. Foreground
-native child/tool cleanup is tested; detached background specialists and escaped
-processes may outlive a call. Finish calls before maintenance, then restart.
-See [MCP serving](docs/mcp-serving.md) for installation, verification and limits.
+Install the generated host dependencies once:
+
+```sh
+cd .agents/jared/.faur-mcp
+npm ci
+```
+
+Review/install the agent's declared native packages, supply model credentials,
+and ask your coding agent to register the server using `.faur-mcp/README.md`.
+Consumers need Node.js >=22.19.0 and npm on Linux/macOS, but no separately
+installed global Pi or Faur. The runtime uses published, unmodified packages.
+
+**Where it works:** Pi runs from the agent's own folder. The configured target
+project is supplied as an absolute path in each request. File operations must
+use absolute target paths; shell commands must explicitly change directory.
+This is advisory—not automatic path rebasing or a filesystem sandbox. Calls
+have fresh conversations, but source-local files/memory are shared; keep
+project-specific state in the target project.
+
+Native instructions, skills, templates, extensions, specialists, commands and
+upstream MCP use Pi's ordinary loading and child-inheritance policies. Ancestor
+instructions/skills can load, and server startup alone does not verify that
+every integration works. Only bundled maker maintenance opts out of execution.
+
+Use explicitly granted provider-key environment variables, or opt into an
+existing Pi Codex subscription store. Trusted agent code, specialists and tools
+can directly access that selected store, including other entries; there is no
+credential isolation, automatic login or API-billing fallback. Forced shutdown
+can interrupt refresh. Timeouts and cancellation are bounded; detached/background
+work may survive. See [MCP serving](docs/mcp-serving.md) for configuration,
+registration, authentication and the full limits.
 
 ### Models: chosen per agent
 
@@ -187,7 +213,8 @@ skills:
 ```
 
 Skills in the shared Agent Skills folder `~/.agents/skills/` also load for the
-orchestrator; subagents get only the skills listed for them.
+orchestrator; specialist skills follow their declared lists and native inheritance
+settings.
 
 ### Tools: browsing by default
 
@@ -260,7 +287,8 @@ regenerated, never because the Faur tooling was updated. What agents use at
 run time comes from Pi and the packages the project pins, never from Faur:
 [pi-commands](https://github.com/mihaiiova/pi-commands) for declared commands,
 only when declared. The Faur version that last built the project is recorded in
-`.faur/build.json`. A change that removes
+`.faur/build.json`. Specialist prompts live in the Markdown body of
+`.pi/agents/<name>.md`, not YAML `systemPrompt` frontmatter. A change that removes
 a capability lists any prompt that still mentions it, and
 `/faur review` flags prompts that describe specific tools.
 
@@ -307,7 +335,8 @@ On first installation Pi may leave npm output pipes open briefly after exit.
 Pi loads the project's `AGENTS.md`, and any in parent folders, into the
 orchestrator's prompt; generation warns about files
 from outside the project. Their contents are sent to the model, so review
-untrusted instructions for prompt injection. Specialists do not receive them.
+untrusted instructions for prompt injection. Specialist project context follows
+native per-agent inheritance settings.
 
 Inside it, `/faur` is the one command:
 
@@ -319,6 +348,13 @@ Inside it, `/faur` is the one command:
 | `/faur sync` | Preview rebuilding the project with this Faur and apply only after confirmation. |
 | `/faur schedule status` | Inspect native Linux user-systemd timers and the last service process result, not task success. |
 | `/faur schedule stop <name>` / `remove <name>` | Preview and confirm disabling/cancelling a schedule, or removing its native units. |
+
+If a change conflicts with a customized README, Faur can keep its existing prose
+and propose only the new documentation in the same diff. Approval is explicit;
+a changed file invalidates the preview, and repeated exact additions are not
+duplicated. Once reconciled, README is fully authored and generation leaves it
+alone. No file deletion, fingerprint editing or unsupported README drift adoption
+is needed. See the [file-ownership contract](skills/faur/schema.md#4-ownership--edit-preservation-contract).
 
 ### Schedule a skill on Linux
 
@@ -363,13 +399,14 @@ credentials that were committed, including those in `.env` or `.faur/`.
 
 For a trusted run, declare the variable names under `integrations.env` and
 have the caller supply them in the process environment (directly, or from
-`.env` through direnv). Pi reads no `.env` itself. The run inherits the
-**entire caller environment**, including undeclared variables. Do not put
-credential values in a workflow request: it becomes prompt text.
+`.env` through direnv). Pi reads no `.env` itself. Plain Pi inherits the
+**entire caller environment**, including undeclared variables; the optional MCP
+host instead passes explicit environment grants and a small fixed environment.
+Do not put credential values in a workflow request: it becomes prompt text.
 
-The Pi configuration directory is separate, but this is **not an OS security
-boundary**. Pi, agents, tools and their subprocesses can access inherited
-credentials; same-user processes may also access the environment or source
+A separate Pi configuration directory, when supplied by the caller or MCP host,
+is **not an OS security boundary**. Pi, agents, tools and their subprocesses can
+access inherited credentials; same-user processes may also access the environment or source
 files. Tool approval and `secret: true` do not isolate values, and Faur does
 not guarantee redaction of tool output, screenshots, logs or artifacts. Use only
 trusted agents and tools, and prefer a restricted test account. For Playwright,
@@ -457,6 +494,14 @@ To install this release instead of a local checkout, use
 `pi install git:github.com/mihaiiova/faur@v0.42.0`.
 Faur pins its own packages in `package.json` under `pi.packages`.
 
+Updating Faur does not update existing generated agents. For older MCP projects,
+remove the unsupported `mcpServer.tools` field (native agent tool settings are now
+authoritative), preview/reconcile regeneration, install declared source packages
+and restart/reconnect the server. Review the expanded native execution and
+credential boundary. Older specialist files need their instructions reconciled
+into native Markdown bodies; preserve authored edits. See the
+[v0.42.0 upgrade notes](docs/releases/v0.42.0.md#upgrade-and-limits).
+
 ## Personal Pi setup
 
 The spec lifecycle, domain skills and the `explore`, `pi-config`, `pi-sync`,
@@ -488,7 +533,7 @@ setup:
     install: npm run install-browser
 ```
 
-`/faur check` reports unmet steps; `/faur setup` previews installs and asks for confirmation. For non-interactive administration use `faur setup <dir> --yes`. Steps marked `needsRoot` are printed, not run. Workflow launches never install. **Command checks execute shell code with your permissions automatically**, including during checks and workflow startup; use only trusted declarations.
+`/faur check` reports unmet steps; `/faur setup` previews installs and asks for confirmation. For non-interactive administration use `faur setup <dir> --yes`. Steps marked `needsRoot` are printed, not run. Workflow launches never install. **Command checks execute shell code with your permissions automatically** during Faur checks and setup inspection; use only trusted declarations. Plain Pi workflow launches do not add a Faur setup preflight.
 
 An MCP or CLI integration may also declare `secretsFile: .faur/service-secrets.env`. Faur creates a missing file privately, does not overwrite an existing file, and adds an ignore entry. Declare the variable in `integrations.env` and configure its value in that file outside Faur; do not send secrets to the model. Integrations must be configured to read their chosen file themselves; Faur does not load it into the launcher environment. Existing tracked files, unsafe permissions, and symlinks must be corrected by the user. Git ignore does not remove a previously committed secret.
 
