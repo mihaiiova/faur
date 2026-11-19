@@ -1,8 +1,5 @@
 {
   "projectRoot": "../..",
-  "tools": [
-    "read"
-  ],
   "env": [],
   "timeoutMs": 10000,
   "auth": {

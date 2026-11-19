@@ -5,7 +5,7 @@ import { readText, atomicWrite, json } from './maintenance-store.mjs';
 
 export const MCP_AUTH_EVIDENCE = '.faur-mcp/auth-evidence.json';
 export const mcpConfig = model => ({ ...model.mcpServer, model: model.orchestrator.model, thinking: model.orchestrator.thinking ?? 'off' });
-const fingerprint = (config, env) => createHash('sha256').update(JSON.stringify([config, env[config.auth?.authFileEnv] ?? null])).digest('hex');
+const fingerprint = (config, env) => createHash('sha256').update(JSON.stringify(['native-source-cwd-v1', config, env[config.auth?.authFileEnv] ?? null])).digest('hex');
 
 /** Best-effort non-secret observation; it never makes task success depend on
  * a writable project. The evidence is local history, not an integrity boundary.
@@ -28,9 +28,11 @@ export function mcpHostingStatus(root, model, { env = process.env } = {}) {
   const result = {
     mode: subscription ? 'pi-subscription' : 'isolated-api-key',
     configured: true,
+    trust: subscription ? 'Selected native credential store is directly available to trusted lead, specialists and tools; not credential isolation.' : 'Trusted lead, specialists and tools share explicit environment grants; not OS isolation.',
+    nativeRuntime: 'published Pi SDK; installed version and functional capabilities must be verified',
     provider: config.model.split('/')[0],
     sourceConfigured: subscription ? Boolean(env[config.auth.authFileEnv]) : (config.env ?? []).every(name => Boolean(env[name])),
-    catalog: 'not verified in the isolated runtime',
+    catalog: 'not verified in the selected runtime',
     authenticated: 'not verified',
     exercised: 'not verified',
     fix: subscription ? 'Use node .faur-mcp/faur/mcp/host.mjs --check-auth for local metadata/catalog checks, or --check-auth --resolve to explicitly permit OAuth refresh (no model call).' : 'Environment presence is not authentication; verify through an explicitly authorized operation.',
@@ -48,7 +50,7 @@ export function mcpHostingStatus(root, model, { env = process.env } = {}) {
     const record = JSON.parse(readText(root, MCP_AUTH_EVIDENCE));
     if (record.fingerprint !== fingerprint(config, env)) return result;
     const validTime = value => typeof value === 'string' && Number.isFinite(Date.parse(value));
-    if (validTime(record.catalogAt)) result.catalog = `last resolved in isolated runtime ${record.catalogAt}; not checked now`;
+    if (validTime(record.catalogAt)) result.catalog = `last resolved in selected runtime ${record.catalogAt}; not checked now`;
     if (validTime(record.authenticatedAt)) result.authenticated = `last resolved locally ${record.authenticatedAt}; not checked now`;
     if (validTime(record.exercisedAt)) result.exercised = `last successful model invocation ${record.exercisedAt}; task success not verified`;
   } catch { /* no historical evidence */ }

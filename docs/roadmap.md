@@ -7,7 +7,12 @@ are in [product-direction.md](product-direction.md); engineering practice is in
 
 ## Current state
 
-**v0.39.0** is released. Faur creates and maintains ordinary Pi projects;
+**v0.42.0** adds full native-agent MCP execution using published Pi packages,
+with source-folder cwd and an explicit absolute target in advisory task context.
+It also corrects specialist instructions to native Markdown bodies. See
+[release notes](releases/v0.42.0.md) and [MCP serving](mcp-serving.md).
+
+Faur creates and maintains ordinary Pi projects;
 generated projects run with plain `pi` without Faur or `system.yaml` at runtime.
 Native files are authoritative for execution; changes are previewed, approved
 and reconciled rather than continuously synchronized.

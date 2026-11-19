@@ -1,3 +1,9 @@
+> Superseded implementation boundary — 2026-11-18: this investigation records
+> the former lead-only broker decision. Current full-native hosting explicitly
+> permits trusted lead/children/tools to access the selected private native
+> store directly. Broker IPC/draining is removed. See ../mcp-serving.md for
+> current trust, refresh, verification and pending publication limitations.
+
 # Pi subscription authentication for MCP hosting — investigation
 
 Inspected 2026-11-16 against the installed global and MCP-local Pi SDK 1.5.2.

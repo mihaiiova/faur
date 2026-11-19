@@ -12,6 +12,7 @@ import { generateProject, managedPaths } from '../src/generate.mjs';
 import { validateSystem } from '../src/validate.mjs';
 import { changeModel } from '../src/changes.mjs';
 import { planChange, applyChange, approvalPreview } from '../src/maintenance.mjs';
+import { installMcp } from './helpers/mcp-install.mjs';
 import { loadYaml } from '../src/yaml-loader.mjs';
 
 const operation = (name, prompt = `${name} the project`) => ({ name, description: `Public ${name}`, inputSchema: { type: 'object', properties: { request: { type: 'string' } }, required: ['request'], additionalProperties: false }, prompt });
@@ -27,8 +28,10 @@ function materialize(root, model) {
 
 test('public MCP declaration is strict, explicit and validates full JSON Schema', () => {
   assert.deepEqual(validateSystem(design()), { ok: true, errors: [] });
+  const toolchain = design(); toolchain.mcpServer.env = ['PATH'];
+  assert.equal(validateSystem(toolchain).ok, true, 'explicit native toolchain PATH grant');
   for (const mutate of [
-    m => { delete m.mcpServer.tools; },
+    m => { m.mcpServer.tools = []; },
     m => { m.mcpServer.tools = ['subagent']; },
     m => { m.mcpServer.env = ['NODE_OPTIONS']; },
     m => { m.mcpServer.operations.push(operation('audit')); },
@@ -55,6 +58,7 @@ test('subscription auth is explicit, Codex-only, provider-bound and never passes
     m => { m.mcpServer.auth.provider = 'openai'; },
     m => { m.mcpServer.auth.mode = 'api-key'; },
     m => { m.mcpServer.auth.authFileEnv = 'HOME'; },
+    m => { m.mcpServer.auth.authFileEnv = 'PATH'; },
     m => { m.mcpServer.auth.authFileEnv = '/tmp/auth.json'; },
     m => { m.mcpServer.auth.access = 'never-inline-a-token'; },
     m => { m.mcpServer.env = ['JARED_PI_AUTH_FILE']; },
@@ -79,7 +83,7 @@ test('opt-in assets are self-contained, idempotent and edit-protected; minimal i
   for (const path of ['.faur-mcp/config.json', '.faur-mcp/package.json', '.pi/extensions/faur-mcp.ts']) {
     assert.equal(existing[path], readFileSync(new URL(`./fixtures/generate/mcp-server/golden/${path}`, import.meta.url), 'utf8'), `golden mismatch: ${path}`);
   }
-  assert.equal(existing['.faur-mcp/config.json'].includes('write'), false);
+  assert.equal(Object.hasOwn(JSON.parse(existing['.faur-mcp/config.json']), 'tools'), false);
   existing['.faur-mcp/faur/mcp/host.mjs'] += '\n// authored edit\n';
   assert.equal(generateProject(model, existing).files.find(f => f.path === '.faur-mcp/faur/mcp/host.mjs').action, 'conflict');
   const updated = structuredClone(model.mcpServer); updated.operations[1].description = 'Revised review';
@@ -152,7 +156,7 @@ test('installed generated agent: real Pi, real stdio MCP, restart, cancellation 
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     const emit = event => res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
     if (mode === 'shell') {
-      const command = 'while :; do printf x >> shell-heartbeat; sleep 0.02; done';
+      const command = `cd ${JSON.stringify(root)}; while :; do printf x >> shell-heartbeat; sleep 0.02; done`;
       const item = { id: 'fc_1', type: 'function_call', call_id: 'call_1', name: 'bash', arguments: JSON.stringify({ command }), status: 'completed' };
       emit({ type: 'response.created', response: { id: 'resp_1', status: 'in_progress', output: [] } });
       emit({ type: 'response.output_item.added', output_index: 0, item: { ...item, arguments: '', status: 'in_progress' } });
@@ -168,7 +172,7 @@ test('installed generated agent: real Pi, real stdio MCP, restart, cancellation 
     emit({ type: 'response.output_text.delta', item_id: 'msg_1', output_index: 0, content_index: 0, delta: answer });
     const done = { ...item, status: 'completed', content: [{ type: 'output_text', text: answer, annotations: [] }] };
     emit({ type: 'response.output_item.done', output_index: 0, item: done });
-    emit({ type: 'response.completed', response: { id: 'resp_1', status: 'completed', output: [done], usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } });
+    emit({ type: 'response.completed', response: { id: 'resp_1', status: mode === 'length' ? 'incomplete' : 'completed', ...(mode === 'length' ? { incomplete_details: { reason: 'max_output_tokens' } } : {}), output: [done], usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } });
     res.end();
   });
   http.listen(0, '127.0.0.1'); await once(http, 'listening');
@@ -180,14 +184,13 @@ test('installed generated agent: real Pi, real stdio MCP, restart, cancellation 
     writeFileSync(join(root, 'AGENTS.md'), 'PARENT_INSTRUCTIONS_MUST_NOT_LOAD');
     writeFileSync(join(root, '.pi/extensions/poison.ts'), 'throw new Error("DEVELOPER_EXTENSION_MUST_NOT_LOAD");');
     writeFileSync(join(home, 'settings.json'), JSON.stringify({ defaultTools: ['write', 'bash'] }));
-    const install = spawnSync('npm', ['ci', '--ignore-scripts'], { cwd: join(source, '.faur-mcp'), encoding: 'utf8', timeout: 120000 });
-    assert.equal(install.status, 0, install.stderr);
+    installMcp(source);
     const localMaintenance = await import(pathToFileURL(join(source, '.faur-mcp/faur/src/maintenance.mjs')));
     const { invoke, loadAgent } = await import(pathToFileURL(join(source, '.faur-mcp/faur/mcp/host.mjs')));
     const workerPath = pathToFileURL(join(root, 'fixture-worker.mjs'));
     writeFileSync(workerPath, readFileSync(new URL('./fixtures/mcp/invocation-worker.mjs', import.meta.url)));
     const fixtureAgent = loadAgent(source);
-    fixtureAgent.config.env = ['FAKE_CREDENTIAL'];
+    fixtureAgent.config.env = ['FAKE_CREDENTIAL', 'PATH'];
     process.env.FAKE_CREDENTIAL = 'fixture-sensitive-value';
     process.env.DEVELOPER_ONLY_TEST_VALUE = 'must-not-reach-child';
     try {
@@ -195,14 +198,19 @@ test('installed generated agent: real Pi, real stdio MCP, restart, cancellation 
       assert.doesNotMatch(reported.content[0].text, /fixture-sensitive-value|must-not-reach-child/);
       assert.match(reported.content[0].text, /REDACTED/);
       const report = JSON.parse(reported.content[0].text);
-      assert.equal(report.cwd, root);
-      assert.deepEqual(report.tools, ['read']);
+      assert.equal(report.cwd, source);
+      assert.equal(report.tools, undefined, 'no redundant MCP tool reduction');
       assert.equal(report.env.DEVELOPER_ONLY_TEST_VALUE, undefined);
       assert.equal(report.env.NODE_OPTIONS, undefined);
+      assert.ok(report.env.PATH.endsWith(`:${process.env.PATH}`), 'explicit non-secret PATH survives answer redaction after packaged Pi prefix');
       assert.equal(existsSync(report.env.HOME), false, 'per-call home removed');
       delete process.env.FAKE_CREDENTIAL;
       assert.match((await invoke(fixtureAgent, 'audit', { request: 'fixture-report' }, undefined, { workerPath })).content[0].text, /Missing required environment/);
       fixtureAgent.config.env = [];
+      assert.match((await invoke(fixtureAgent, 'audit', { request: 'x'.repeat(1024 * 1024) }, undefined, { workerPath })).content[0].text, /input exceeded limit/);
+      const malformed = await invoke(fixtureAgent, 'audit', { request: 'fixture-malformed' }, undefined, { workerPath });
+      assert.equal(malformed.isError, true); assert.doesNotMatch(JSON.stringify(malformed), /PRIVATE_INVALID/);
+      assert.match((await invoke(fixtureAgent, 'audit', { request: 'fixture-oversized' }, undefined, { workerPath })).content[0].text, /output exceeded limit/);
       fixtureAgent.config.timeoutMs = 10000;
       const abort = new AbortController();
       const pending = invoke(fixtureAgent, 'audit', { request: 'fixture-hang' }, abort.signal, { workerPath });
@@ -236,8 +244,12 @@ test('installed generated agent: real Pi, real stdio MCP, restart, cancellation 
     assert.equal((await client.callTool({ name: 'audit', arguments: { request: 42 } })).isError, true);
     assert.equal(requests.length, count);
     const serialized = JSON.stringify(requests);
-    assert.doesNotMatch(serialized, /PARENT_INSTRUCTIONS|DEVELOPER_EXTENSION|DO_NOT_LEAK|faur_plan/);
-    assert.deepEqual(requests[0].tools.map(t => t.name), ['read']);
+    assert.match(serialized, /PARENT_INSTRUCTIONS_MUST_NOT_LOAD/, 'native ancestor context loads: no projectOnly isolation');
+    assert.doesNotMatch(serialized, /DEVELOPER_EXTENSION|DO_NOT_LEAK|faur_plan/);
+    assert.deepEqual(requests[0].tools.map(t => t.name), ['read', 'write', 'edit', 'ls', 'find', 'grep']);
+    mode = 'length';
+    const truncated = await client.callTool({ name: 'audit', arguments: { request: 'inspect' } });
+    assert.equal(truncated.isError, true, 'incomplete HTTP response never returns truncated success');
     mode = 'error';
     const failed = await client.callTool({ name: 'audit', arguments: { request: 'inspect' } });
     assert.equal(failed.isError, true); assert.doesNotMatch(JSON.stringify(failed), /PRIVATE_PROVIDER_ERROR/);
@@ -276,9 +288,11 @@ test('installed generated agent: real Pi, real stdio MCP, restart, cancellation 
       assert.match(rawOut, /serverInfo/, 'symlinked entry starts MCP');
     } finally { raw.stdin.end(); await once(raw, 'close'); }
     updated.timeoutMs = 30000;
-    updated.tools = ['bash'];
     mode = 'shell';
     localMaintenance.applyChange(source, localMaintenance.planChange(source, [{ op: 'set', target: 'mcpServer', value: updated }]), true);
+    const settingsPath = join(source, '.pi/settings.json');
+    const nativeSettings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    writeFileSync(settingsPath, JSON.stringify({ ...nativeSettings, defaultTools: ['bash'] }));
     const disconnected = spawn(process.execPath, [join(root, 'agent link/.faur-mcp/faur/mcp/host.mjs')], { cwd: tmpdir(), env, stdio: ['pipe', 'pipe', 'pipe'] });
     disconnected.stdout.resume(); disconnected.stderr.resume();
     try {

@@ -1,44 +1,32 @@
+## Explicit native Pi Codex subscription store
 
-## Pi Codex subscription authentication
+In the client's local server environment, set {{AUTH_FILE_ENV}} to the absolute
+path of an existing owner-only Pi auth.json owned by the current user. Only the
+variable name is generated; never copy or commit credentials. The selector
+variable is host-only, but its selected store is directly available to trusted
+native lead, specialists, tools and subprocesses through a temporary auth.json
+symlink. No auth values are copied. Other store entries are NOT hidden from
+trusted code. This intentionally supersedes the lead-only broker (2026-11-18).
 
-Authentication is explicitly opted into pi-subscription for openai-codex.
-In your MCP client's local server environment, set {{AUTH_FILE_ENV}} to the
-absolute path of your existing private Pi auth.json. This is a HOST-ONLY path
-variable, not a credential value and not a runtime env grant. Never copy the
-credential file into this project or commit its contents. Keep its permissions
-private (owner-only). Sign in with /login openai-codex in a normal Pi session
-using that store before invoking MCP; requests never start interactive login.
-No separately billed OpenAI API key or provider/model fallback is used.
+Sign in with /login openai-codex in a normal Pi session using that store first.
+Requests never log in, discover global auth or fall back to API billing. Native
+Pi owns store locking, expiry rechecks, refresh and persistence, including
+symlink aliases and normal Pi clients. Forced cancellation/termination during
+refresh can interrupt persistence and require re-login; this is not a durable
+broker service or OS security boundary.
 
-The trusted host uses Pi's supported getAuth API and native auth-file lock to
-refresh/persist only the selected provider. The SDK store internally parses the
-shared file, including other entries; those entries and refresh tokens never
-reach the worker. The worker gets resolved Codex request auth over private IPC,
-not through env, invocation JSON, prompts or logs. It still loads no global
-settings, extensions, skills, models.json or upstream MCP. This is not an OS
-security boundary against trusted same-user tools.
-
-Normal Pi sessions and multiple hosts using the same store share Pi's file lock.
-Invocation cancellation/timeout still stops its worker promptly. Graceful HOST
-shutdown drains an already-started refresh (about 15 seconds plus storage work);
-configure the client to allow at least 20 seconds before force-killing the host.
-If a client cannot honor that grace, do not use shared-login mode with it.
-SIGKILL, disk failures or ambiguous remote refresh outcomes can still require
-logging in again, as with ordinary Pi; loss-free/crash-durable rotation is not
-guaranteed. Do not force-kill the host during refresh.
-
-From the agent source directory, inspect the pinned runtime without a model call:
+Inspect metadata without model requests or refresh:
 
     node .faur-mcp/faur/mcp/host.mjs --check-auth
 
-This reads local login/catalog metadata; it does not refresh or prove provider
-acceptance. To explicitly allow OAuth resolution/refresh (still no model call):
+Explicitly permit native OAuth resolution/refresh (still no model request):
 
     node .faur-mcp/faur/mcp/host.mjs --check-auth --resolve
 
-The selected model must resolve in the pinned isolated catalog. A model merely
-listed in your developer Pi is not sufficient; incompatible catalogs fail with
-no substitution. Configured, locally resolved and actually exercised are separate
-states. /faur check reports historical evidence, not current provider acceptance
-or task success. Auth evidence contains only config/source fingerprints and
-timestamps in ignored .faur-mcp/auth-evidence.json, never credentials.
+Configured, locally resolved and successfully exercised are distinct. The auth
+check uses the installed native catalog and S's .pi/models.json, not global overrides;
+source extension models require an authorized actual operation for verification.
+/faur check never reads credentials or refreshes automatically. Ignored
+.faur-mcp/auth-evidence.json holds only boundary-versioned config/source
+fingerprints and timestamps. History is advisory, not current provider/model
+acceptance or task-success proof. Old broker evidence is not reused.

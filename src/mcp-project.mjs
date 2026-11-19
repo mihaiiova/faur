@@ -37,8 +37,100 @@ function desiredFiles(model) {
     '.faur-mcp/package-lock.json': readFileSync(new URL('mcp/package-lock.json', root), 'utf8'),
     '.faur-mcp/.gitignore': 'node_modules/\nauth-evidence.json\n',
     '.faur-mcp/config.json': json(mcpConfig(model)),
-    '.pi/extensions/faur-mcp.ts': "// Developer maintenance only. MCP execution never discovers extensions.\nexport { default } from '../../.faur-mcp/faur/extensions/faur/index.ts';\n",
-    '.faur-mcp/README.md': `# Project-local MCP agent\n\nInstall once from this directory: \`npm ci\`. Requires Node.js 22+ and npm.\nNo global Pi or Faur is required. Dependencies are pinned in package-lock.json.\n\n## Register locally\n\nAsk your coding agent to register this server for the current project using its\nclient-specific MCP configuration. Do not change global configuration.\n\n- Transport: stdio\n- Command: an absolute path to your Node.js executable\n- Arguments: one absolute path to \`faur/mcp/host.mjs\` in this directory\n- Working directory: this directory (optional; the entry point is cwd-independent)\n- Agent source: the parent directory of this directory\n- Target project: \`${model.mcpServer.projectRoot}\`, resolved relative to the agent source\n- Required environment variable names: ${(model.mcpServer.env ?? []).join(', ') || (model.mcpServer.auth ? '(none; subscription auth is supplied by the host broker)' : '(none declared; declare the model provider key before invoking)')}\n\nUse the client's supported environment/secret mechanism. Never paste credential\nvalues into committed resources. ${model.mcpServer.auth ? 'The host uses only the explicitly selected Pi subscription login; it does not load .env.' : 'The host does not read .env or global Pi logins.'}\n\`config.json\` defines the public catalog; it does not expose internal tools.\n${subscriptionInstructions(model)}\n## Maintain\n\nFrom the agent source directory, run \`pi\` and trust the project, then use\n\`/faur <request>\`. Without global Pi, run\n\`node .faur-mcp/node_modules/@earendil-works/pi-coding-agent/dist/cli.js\`.\nThe local extension loads bundled Faur for developer sessions only. If a global\nFaur extension is also installed, disable that duplicate for this project.\n\nFinish active calls before editing or applying changes, then restart/reconnect\nthe MCP server. There is no hot reload. One call runs at a time per server;\noverlap is rejected, not queued. Multiple server processes are not coordinated.\nAfter dependency changes, run \`npm ci\` here again before restarting.\n\n## Execution and limits\n\nEach call starts fresh Pi SDK execution in a child process. Runtime receives\nonly the explicit built-in tool allowlist and declared environment variables.\nIt reads the authored part of .pi/APPEND_SYSTEM.md and the operation prompt;\nit does not load developer extensions, specialists, skills, upstream MCP,\nproject/global settings, parent instructions or ${model.mcpServer.auth ? 'unrelated credentials. Selected subscription request auth comes from the host broker.' : 'global credentials.'}\nTools use the explicit target project as their working directory.\nConfiguration isolation and tool selection are enforced by the SDK loader;\nthis is NOT OS/filesystem isolation. Read can read outside the project; bash\ncan access the user's files and credentials. Instructions are advisory.\nDo not use this as a boundary against hostile callers or untrusted projects.\n\nPOSIX process groups are terminated on completion, error, timeout, cancellation,\nstdin close and SIGTERM/SIGINT. Windows hosting is refused in this first slice.\nPi aborts active tools too. Commands that deliberately background/detach work\ncan outlive a tool call; escaped groups/daemons are outside this guarantee.\nOnly final answer text is returned, not logs, environment or provider errors.\nDeclared secret values are redacted from answer text as defense in depth, not\na general exfiltration boundary. All allowed tools share the call's credentials.\nAn answer is not proof that the requested audit/review succeeded.\n`,
+    '.pi/extensions/faur-mcp.ts': `// Developer maintenance only: never import the maker in native agent execution.
+export default async function (pi) {
+  if (process.env.FAUR_MCP_RUNTIME === '1') return;
+  const { default: maintain } = await import('../../.faur-mcp/faur/extensions/faur/index.ts');
+  return maintain(pi);
+}
+`,
+    '.faur-mcp/README.md': `# Project-local MCP agent
+
+Requires Node.js >=22.19.0 and npm. Install locked host dependencies here with
+\`npm ci\`. No global Pi or Faur is required. Separately review and install
+source-declared Pi packages using native Pi in the agent source; operation
+calls never install missing packages. Reinstall when dependency pins change.
+
+## Register locally
+
+Use your client's supported local MCP configuration (never global registration):
+
+- Transport: stdio
+- Command: an absolute path to Node.js
+- Argument: the absolute path to \`faur/mcp/host.mjs\` in this directory
+- Agent source S: the parent directory of this directory
+- Target T: \`${model.mcpServer.projectRoot}\`, relative to S
+- Required environment names: ${(model.mcpServer.env ?? []).join(', ') || '(none declared)'}
+
+Working directory at registration does not select resources. Only named env
+grants plus a small fixed environment reach native lead/children/processes.
+PATH can be explicitly granted for native toolchains; HOME, Pi/Node loader
+configuration and ambient globals cannot. Never commit credential values.
+${subscriptionInstructions(model)}
+## Native execution and trust — amendment 2026-11-19
+
+This supersedes the unpublished source/workspace experiment, reduced runtime
+and lead-only auth broker. Published unmodified Pi 1.5.2 runs each fresh SDK
+session with cwd=S (the source), not T. Native settings, authored instructions,
+skills, templates, specialists, extensions, packages, commands and upstream MCP
+load by ordinary Pi discovery. Only the bundled developer maintenance extension
+opts out via an internal environment marker before importing Faur; that marker
+is not a security boundary. Genuine authored extensions load normally.
+
+Every operation supplies the absolute T and validated JSON arguments as task
+context after native skill/template expansion. Target work must use absolute
+paths or shell cd T; commands/MCP receive T in arguments when needed. This is
+ADVISORY, not automatic tool/workspace rebasing or a sandbox. Relative assets,
+commands, upstream MCP and default specialist cwd remain S. Fresh conversations
+do not isolate source files/memory: keep project-specific state under T.
+
+A fresh Pi config/state directory and explicit env grants are used, but discovery
+is NOT hermetic: ancestor instructions/skills and explicit source paths follow
+ordinary native policies. Foreground specialists do not automatically inherit
+all lead extensions/context/skills: declare extension resources in native agent
+metadata and select skills/inheritance as supported by pi-subagents. Background
+children have different native inheritance. No custom inheritance is added.
+
+Builtin MCP/codemode/tool_search factories are bound with native session_start.
+Pi connects enabled servers in the background; first prompts wait for direct
+servers, and deferred tools wait when needed. Startup alone does not prove all
+servers connected. Verify actual configured tools. Known package/resource and
+extension errors reported by the SDK fail actionable; no operation installs code.
+Native discovery may skip nonexistent resource paths without diagnostics: startup
+is not exhaustive resource readiness, and no second discovery validator is added. No separate
+mcpServer.tools list exists: native source tool selection applies.
+
+Trusted lead, specialists, tools and subprocesses share OS permissions and any
+explicitly selected credential store, including other entries. They can read
+outside T. There is no automatic login, global auth discovery or
+model/provider/API-billing fallback. Provider and extension logs are withheld;
+only final answer text is returned. Exact declared env values (except non-secret
+PATH) and observed selected tokens are redacted as defense in depth, not an
+exfiltration boundary.
+Truncated model answers are errors, not successful results.
+
+## Lifecycle and maintenance
+
+One active call per host; overlap is rejected, not queued. Input/output bounds
+are 1 MiB. Timeout, cancellation, EOF and SIGTERM/SIGINT abort the native session,
+emit native shutdown and terminate the POSIX worker group (SIGKILL after 250ms).
+Windows hosting is refused. Native tools own cleanup of separately grouped
+processes; same-group leftovers are killed even on success. Native detached
+background specialists, escaped groups and daemons may outlive the operation;
+this adapter does not supervise persistent work. Do not launch it in MCP calls.
+Forced termination during native credential refresh can interrupt persistence
+and require re-login; loss-free token rotation is not guaranteed.
+
+Finish active calls before editing/applying, then restart/reconnect. Public
+catalog/config are captured at host startup; source resources load per fresh
+call. No watcher or hot reload. Separate hosts are not coordinated.
+
+Maintain from S with \`pi\` and \`/faur <request>\`, or without global Pi:
+\`node .faur-mcp/node_modules/@earendil-works/pi-coding-agent/dist/cli.js\`.
+Trust the project to load the local maintenance extension. Disable duplicate
+global Faur. Changes retain normal preview/approval/stale-state protections.
+A successful run is not proof of task success; review the answer.
+`,
   };
 }
 

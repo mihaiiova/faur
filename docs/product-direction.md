@@ -57,7 +57,14 @@ extensions, MCP servers, sessions. It does not add another agent runtime,
 workflow engine, scheduler, plugin system or memory store. Ordinary generated
 projects do not load Faur. Approved 2026-11-16: optional `mcpServer` projects
 bundle a thin Faur stdio adapter and local maintenance assets; Pi still owns
-all agent execution. See [MCP serving](mcp-serving.md). What an agent needs
+all agent execution. Amendment 2026-11-19: hosting uses published unmodified Pi with cwd=source S,
+absolute target T and validated arguments supplied as advisory task context.
+Tools/commands/upstream MCP/default specialists retain source cwd; no automatic
+workspace rebasing, strict discovery isolation or fork is required. Ordinary
+ancestor discovery and native child resource/inheritance policies apply; source
+state is shared across targets. Trusted code directly accesses an explicitly
+selected private credential store, not a lead-only broker or credential sandbox.
+See [MCP serving](mcp-serving.md). What an agent needs
 at run time comes from Pi and explicit pinned dependencies.
 
 Project-local agents may live in `.agents/<name>/` and be maintained from the

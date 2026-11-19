@@ -92,10 +92,10 @@ test("the lead's generated section lists exactly the MCP tools .pi/mcp.json expo
   assert.match(line('plain'), /\(all tools; tools named `mcp__plain__<tool>`, found with tool_search\)$/);
 });
 
-test('every agent file carries its own section: specialists in frontmatter, the lead after its prompt', () => {
+test('every agent file carries its own section: specialists in native Markdown bodies, the lead after its prompt', () => {
   const { files } = generateProject(model, {}, { piPackages: pkg.pi.packages });
   const seo = files.find((f) => f.path === '.pi/agents/seo.md').content;
-  assert.match(seo, /systemPrompt: \|\n  Research\.\n  \n  ## What you can use\n/);
+  assert.match(seo, /---\n\nResearch\.\n\n## What you can use\n/);
   const append = files.find((f) => f.path === '.pi/APPEND_SYSTEM.md').content;
   assert.ok(append.includes(`${model.orchestrator.prompt}\n<!-- faur:derived v1 begin`), 'authored prompt first');
   assert.ok(append.includes(capabilitySection(model, 'lead')), 'then the generated section');

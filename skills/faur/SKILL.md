@@ -124,7 +124,8 @@ interview again; reuse the design and the conversation, then:
    `agents`, `skills`, `integrations`, `packages`). When explicitly asked to
    expose the agent as an MCP server, add `mcpServer` (schema.md): selected
    public operations, explicit target projectRoot relative to the agent folder,
-   runtime tools and env variable names. This is distinct from upstream MCP
+   env variable names. Native source resources/tools execute without a second
+   MCP tool list; no mcpServer.tools field. This is distinct from upstream MCP
    integrations. Generate in the requested folder (e.g. `.agents/jared`), then
    point the user to `.faur-mcp/README.md` for npm ci and client-specific local
    registration. Never write global client configuration or embed secrets.
@@ -133,13 +134,23 @@ interview again; reuse the design and the conversation, then:
    `openai-codex` matching the model, and an `authFileEnv` host-only name. The user
    configures that variable to their existing private auth.json; never copy it,
    request token values or put the source variable in runtime env grants. Explain
-   that the trusted host's SDK store reads the shared file internally, only
-   selected request auth reaches the worker, and graceful shutdown must allow
-   native refresh persistence. Check the pinned runtime's exact catalog with
+   that trusted native lead, specialists and tools may directly access the
+   selected store, including other entries: no credential isolation or broker.
+   Pi owns refresh/locking; forced cancellation can interrupt persistence and
+   require re-login. Check the pinned runtime's exact catalog with
    `--check-auth`; `--resolve` explicitly permits OAuth refresh, not a model call.
    Do not equate configured/login presence, resolved auth and exercised calls;
    never fall back to API billing or run a live subscription smoke test without
    separate permission.
+   **2026-11-19 native contract:** published unmodified Pi runs in source S.
+   Every task gets absolute target T and validated JSON after native slash
+   expansion. Tools/commands/upstream MCP/default specialists remain cwd=S;
+   target work needs absolute paths or shell cd T. This is advisory, not automatic
+   rebasing or sandboxing. Ordinary ancestor discovery and native child policies
+   apply; foreground extension resources need native metadata. Source state is
+   shared: keep project-specific files/memory under T. No unpublished API/fork or
+   publication prerequisite. Explicitly install source packages with packaged Pi;
+   calls never install. Native MCP startup is not proof all servers connected.
 4. **Validate** with `faur validate <dir>`.
 5. **Preview** with `faur generate <dir> --dry-run`, and summarize what will
    be created — agents with their exact models and tools, skills with their
@@ -506,7 +517,7 @@ when this turn ends. Don't do the work, and don't tell them to type
      switches one agent's (or the orchestrator's) model. Offer only models from
      the inspected available-model list; thinking is optional and null removes it.
    - {"op":"set","target":"orchestrator","value":{...}} replaces the block.
-   - {"op":"set","target":"mcpServer","value":{...}} replaces the optional public MCP interface (see schema.md). Use an explicit target projectRoot, runtime tools and env names; do not inherit developer tools. Each operation binds validated JSON arguments to a prompt for the lead. Finish active calls before applying, then restart/reconnect the server. Never register globally or assume a client configuration format.
+   - {"op":"set","target":"mcpServer","value":{...}} replaces the optional public MCP interface (see schema.md). Use an explicit target projectRoot, env names; use source-native resources/tools, never a separate MCP tools list. Each operation binds validated JSON arguments to a prompt for the lead. Finish active calls before applying, then restart/reconnect the server. Never register globally or assume a client configuration format.
      Also supported: integrations, packages. Use these to change
      tools, integrations or declared dependencies without a generic path-based
      mutation language.

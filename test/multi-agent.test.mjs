@@ -63,7 +63,8 @@ test("N agents materialize to N .pi/agents/*.md files with correct frontmatter",
   assert.ok(analyst.content.includes("tools:\n  - read\n  - grep\n  - find\n  - ls\n"));
   assert.ok(analyst.content.includes("model: provider-b/model-small"), "the agent's own model ref");
   assert.ok(analyst.content.includes("thinking: low"), "the agent's own thinking level");
-  assert.ok(analyst.content.includes("systemPrompt: |"));
+  assert.ok(analyst.content.includes("---\n\nYou analyze"));
+  assert.ok(!analyst.content.includes("systemPrompt:"));
   assert.ok(analyst.content.includes("You analyze SEO data and identify opportunities."));
 
   const writer = byPath(files, ".pi/agents/article-writer.md");

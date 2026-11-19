@@ -5,7 +5,12 @@ import { join } from 'node:path';
 let input = '';
 for await (const chunk of process.stdin) input += chunk;
 const request = JSON.parse(input);
-if (request.prompt.includes('fixture-hang')) {
+request.prompt += request.taskContext;
+if (request.prompt.includes('fixture-malformed')) {
+  process.stdout.write('PRIVATE_INVALID_JSON_DIAGNOSTIC');
+} else if (request.prompt.includes('fixture-oversized')) {
+  process.stdout.write('x'.repeat(1024 * 1024 + 1));
+} else if (request.prompt.includes('fixture-hang')) {
   spawn(process.execPath, ['-e', `const fs = require('fs'); setInterval(() => fs.appendFileSync(process.argv[1], '.'), 20);`, join(request.target, 'heartbeat')], { stdio: 'ignore' });
   process.on('SIGTERM', () => {}); // Prove the bounded SIGKILL escalation path.
   writeFileSync(join(request.target, 'worker-ready'), 'ready');

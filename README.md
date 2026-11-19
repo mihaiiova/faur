@@ -104,25 +104,35 @@ agent's executable resources. See [project-local agents](docs/project-local-agen
 /faur Create Jared in .agents/jared and expose audit and review as MCP tools.
 ```
 
-The optional `mcpServer` declaration defines public operations, JSON input
-schemas, prompt bindings, an explicit target root and separate runtime tools/env
-names. Faur generates a self-contained stdio server with bundled package assets
-and pinned, locked dependencies. Run `npm ci` in `.agents/jared/.faur-mcp`, then
-ask your coding agent to register it locally using its generated instructions.
-No global Pi/Faur is required for serving or local maintenance.
+The optional `mcpServer` declaration binds public JSON-Schema operations to
+fresh native Pi sessions, with an explicit target root and environment grants.
+Source instructions, skills, templates, specialists, extensions, packages,
+commands and upstream MCP load through published unmodified Pi 1.5.2. Native
+cwd remains the **source S**; each operation supplies the absolute target T and
+validated JSON arguments. Target file work needs absolute paths or shell cd T:
+this is advisory, not automatic rebasing or a sandbox. Ordinary ancestor discovery
+and native child inheritance/resource policies apply; source-local memory/files
+are shared, so keep project-specific state under T. No second tool profile exists.
+Only bundled maker maintenance opts out; authored extensions load normally.
 
-Each call uses fresh Pi SDK execution. Timeout, cancellation and active-tool
-cleanup are enforced; configuration isolation is **not OS/filesystem isolation**.
-The first host is POSIX-only and uses Pi's built-in model catalog. Finish active
-calls before maintenance and restart/reconnect afterward; no hot reload.
-API-key authentication remains isolated by default. To reuse an existing Pi
-Codex subscription login, explicitly declare `mcpServer.auth` with
-`mode: pi-subscription`, `provider: openai-codex`, and an `authFileEnv` host-only
-variable naming your private Pi auth.json. The trusted host uses native Pi
-refresh/locking; only selected request auth reaches the worker, never the whole
-Pi home. Allow at least 20 seconds for graceful host shutdown to drain refresh
-persistence; do not enable this mode for clients that cannot honor that grace.
-See [MCP serving](docs/mcp-serving.md) for installation, permissions and limits.
+**Amendment 2026-11-19:** independent normal registry npm ci and explicit native
+package installation are tested; no unpublished API, tarball or upstream change
+is required. Minimal projects remain unchanged. No global Pi/Faur is needed.
+Register locally using generated instructions; never embed credentials.
+Native MCP connects on session_start and waits according to direct/deferred
+policy; startup alone is not all-server readiness. Verify actual tools.
+
+Explicit subscription mode (`auth.mode: pi-subscription`, provider
+`openai-codex`, `authFileEnv` naming a private existing Pi auth.json) gives
+trusted native lead, specialists and tools direct access to the selected store.
+This supersedes the lead-only broker: no credential isolation is claimed.
+Pi owns refresh/locking; forced termination can interrupt persistence and require
+re-login. No automatic login/global auth discovery/API-billing fallback.
+
+Timeout/cancellation, bounds and fresh sessions remain enforced. Foreground
+native child/tool cleanup is tested; detached background specialists and escaped
+processes may outlive a call. Finish calls before maintenance, then restart.
+See [MCP serving](docs/mcp-serving.md) for installation, verification and limits.
 
 ### Models: chosen per agent
 
@@ -444,7 +454,7 @@ pi install /path/to/faur
 `/faur` is then available in your Pi sessions. Ordinary generated projects do
 not pin Faur; opt-in MCP-serving projects bundle its hosting/maintenance assets.
 To install this release instead of a local checkout, use
-`pi install git:github.com/mihaiiova/faur@v0.41.1`.
+`pi install git:github.com/mihaiiova/faur@v0.42.0`.
 Faur pins its own packages in `package.json` under `pi.packages`.
 
 ## Personal Pi setup

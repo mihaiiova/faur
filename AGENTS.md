@@ -96,6 +96,14 @@ Approved exception (2026-11-16): opt-in `mcpServer` projects bundle Faur's thin
 stdio MCP adapter and developer maintenance assets. Pi still owns execution;
 Faur owns only the public declaration, hosting and invocation boundary. No
 Agent Kit package, orchestration engine or mandatory minimal-agent runtime.
+Amended 2026-11-19: published unmodified Pi runs in source S; every operation
+supplies an absolute target T and validated JSON task arguments. Tools, commands,
+upstream MCP and default specialists retain cwd=S. Absolute paths/shell cd T
+are advisory, not automatic rebasing or sandboxing. Ordinary ancestor discovery
+and native child resource/inheritance policies apply; source-local state is shared.
+Trusted lead, specialists and tools may directly use an explicitly selected
+private native credential store; no OS/credential or strict discovery isolation.
+Registry-only installation needs no unpublished API or fork.
 See [docs/mcp-serving.md](docs/mcp-serving.md).
 
 - **Faur** (`extensions/faur/` the `/faur` command, `src/` the CLI and

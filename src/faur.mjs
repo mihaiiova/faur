@@ -278,7 +278,7 @@ function detectAgents(dir) {
       skills: Array.isArray(fm.skills)
         ? fm.skills
         : typeof fm.skills === "string" ? fm.skills.split(",").map((s) => s.trim()).filter(Boolean) : [],
-      prompt: typeof fm.systemPrompt === "string" ? fm.systemPrompt : body,
+      prompt: body.replace(/^\n/, ''),
       generatedMarker: /<!-- faur:generated v1 sha256=[0-9a-f]{64} -->\s*$/.test(text),
       intactGenerated: intactScaffold(text),
     });

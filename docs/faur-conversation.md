@@ -183,3 +183,28 @@ Faur does not provide credential isolation. `system.yaml` and the generator
 are unchanged; the existing proposal/approval path remains authoritative.
 Scheduling adds optional maker-side CLI and `/faur` operations, not schema or
 runtime requirements.
+
+
+## Native MCP hosting amendment — 2026-11-19
+
+Design ordinary native resources and public operations together. Published Pi
+runs in source S; each task receives absolute target T and validated JSON after
+native skill/template expansion. Explain that tools, relative commands/assets,
+upstream MCP and default specialist cwd remain S; use absolute paths or shell
+cd T for target work. This is advisory, not automatic rebasing or sandboxing.
+Ordinary ancestor discovery and native child resource/inheritance policies apply:
+foreground extensions need native metadata, not forced ambient inheritance.
+Source-local memory/files are shared; keep project-specific state under T.
+Only bundled maker maintenance opts out. No second MCP tool list, fork,
+unpublished API or pending publication gate is required. Install locked host
+dependencies with npm ci and source packages explicitly with packaged Pi;
+operation calls never install. Startup uses native session_start/direct/deferred
+behavior, not all-server readiness. Verify actual tools; report known failures.
+
+Subscription auth directly exposes the explicitly selected private native store
+to trusted lead/specialists/tools, including other entries. No credential
+isolation, automatic login/global auth discovery or API fallback. Native locking/
+refresh can be interrupted by forced shutdown. Separate configured, locally
+resolved and actually exercised evidence; never inspect real credentials or
+call live providers without permission. Foreground cleanup is tested;
+detached/escaping work can survive. Do not start persistent work in MCP calls.
