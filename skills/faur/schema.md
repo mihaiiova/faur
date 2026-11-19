@@ -55,7 +55,10 @@ availability: the catalog is machine-specific. `faur validate`, `generate`
 and `modify` warn about a model missing from the local line-up, without
 failing. The orchestrator's model becomes `defaultProvider`/`defaultModel`/
 `defaultThinkingLevel` in `.pi/settings.json`; a subagent's model and thinking
-level go into its own `.pi/agents/<name>.md` frontmatter. No routing overrides
+level go into its own `.pi/agents/<name>.md` frontmatter. Specialist prompts
+and generated capability guidance are native Markdown bodies (2026-11-18); the
+old YAML `systemPrompt` generation was ignored by native pi-subagents and is
+superseded. Regenerate old files or explicitly reconcile authored edits. No routing overrides
 (`subagents.agentOverrides`) are emitted, and stale ones are removed.
 
 ### `orchestrator`
@@ -226,16 +229,17 @@ Requires an orchestrator. Allowed keys:
 
 - `projectRoot` (required): absolute path or path relative to the **agent source
   folder**, e.g. `../..` for `.agents/jared` in a main project. No `~` expansion.
-  The directory must exist when starting the server. It is the tools' working
-  directory, not a filesystem containment boundary.
-- `tools` (required): explicit unique built-in names from `read`, `grep`, `find`,
-  `ls`, `write`, `edit`, `bash`. `[]` grants none. No browsing baseline is added;
-  developer tool lists, extensions, skills, specialists and upstream MCP are
-  never inherited by MCP execution.
+  The directory must exist when starting the server. This is target T supplied
+  as an absolute task path, not tool cwd or filesystem containment.
+- `tools` is no longer a key (2026-11-18); it is strictly rejected. Native
+  source settings and specialist definitions select tools. Source instructions,
+  skills, prompt templates, specialists, extensions, packages, commands and
+  upstream MCP load through published Pi's ordinary discovery, never a reduced list.
 - `env` (optional): unique uppercase environment variable **names**, including
   the model provider key. No values. Execution/configuration override names
-  (e.g. HOME, PATH, NODE_*, PI_*, FAUR_*) are refused. Every declared variable
+  (e.g. HOME, NODE_*, PI_*, FAUR_*) are refused. Every declared variable
   must be set for invocation; undeclared environment variables are excluded.
+  PATH may be explicitly granted for native toolchains and subprocesses.
 - `auth` (optional; since v0.41.0): explicit Pi subscription delegation. Allowed
   keys are only `mode: pi-subscription`, `provider: openai-codex`, and
   `authFileEnv: <UPPERCASE_VARIABLE_NAME>` (all required). The provider must match
@@ -245,7 +249,7 @@ Requires an orchestrator. Allowed keys:
   Execution/configuration override names such as HOME/PATH/PI_* are rejected;
   FAUR_* host-only names are allowed. Omit `auth` for the unchanged isolated
   API-key mode. No automatic source discovery, login, API-key/provider fallback,
-  auth-file copying or global Pi resource inheritance is enabled.
+  auth-file copying is enabled. Ordinary discovery still includes ancestor resources.
 - `timeoutMs` (optional): integer 1–3600000, default 120000, covering child startup
   and execution. Shutdown has a further 250ms SIGTERM grace before SIGKILL.
 - `operations` (required): 1–100 entries, each with only `name`, `description`,
@@ -256,25 +260,39 @@ Requires an orchestrator. Allowed keys:
   without coercion, defaults or mutation. Use `additionalProperties: false`
   when undeclared inputs should be refused.
 
-Each binding runs the lead with its authored native prompt and the operation's
-`prompt`, followed by the validated arguments serialized as JSON data. It is
-not a command, specialist selection or automatic internal tool exposure.
-The lead's model and thinking level come from the orchestrator declaration;
-only Pi's built-in model catalog is available (no custom provider extensions or
-models.json). A model discovered in the developer session must also resolve in
-this pinned isolated catalog; mismatch fails explicitly before auth-store access.
-By default, declare provider key variables in `env`; no global login is read.
-The opt-in `auth` mode instead delegates Codex auth to the trusted host's native
-Pi getAuth/credential-store implementation. Its SDK internally reads the shared
-credential file, including unrelated entries, but only selected resolved request
-auth crosses private IPC to the worker. No refresh token or source path reaches
-the worker. Native file locking coordinates normal Pi and multiple host processes.
-An invocation timeout/cancel kills its worker as before; graceful host shutdown
-must drain a started refresh (allow at least 20 seconds in the client). Hard kill,
-disk failure and ambiguous remote refresh outcomes have ordinary Pi's limitations,
-not a loss-free/crash-durable guarantee. This is not OS isolation from trusted
-same-user tools. Instructions to treat arguments as data remain advisory, not a
-security boundary against prompt injection.
+Each binding runs a fresh published native lead in source S. The operation prompt
+uses native skill/template expansion; a before_agent_start task-context message
+always supplies absolute T and validated JSON, even for templates without $@.
+Lead/child tools, commands, relative assets, processes and default MCP stdio stay
+cwd=S. Target work requires absolute paths or shell cd T; pass T in delegated
+tasks and command/MCP arguments as needed. This is advisory, not automatic
+workspace rebasing or a sandbox. Ordinary ancestor discovery/native child
+resource and inheritance policies apply, not strict isolation. Foreground
+specialists need declared extension paths in native metadata; Faur does not
+infer them. Fresh conversations do not isolate shared source files/memory:
+keep project-specific state under T. Only bundled maker maintenance opts out
+via an internal convenience marker; genuine authored extensions load normally.
+Known package/resource/extension errors fail actionable. Source packages must
+be installed explicitly; operation calls never acquire code. Native MCP starts
+on session_start, waits for direct/deferred tools according to native policy;
+startup alone is not proof every enabled server connected. Verify actual tools.
+
+The selected model/thinking comes from the orchestrator; native catalog, source
+models.json and source provider registrations resolve the exact model. No global
+model discovery or alternate model/provider/API-billing fallback. Default auth
+uses named env grants, not global logins. Subscription mode explicitly selects
+an owner-only store through authFileEnv; native lead, specialists, tools and
+subprocesses may directly access that store (temporary symlink, no copied values),
+including other entries. Pi owns locking/refresh/persistence. This supersedes
+the lead-only broker contract (2026-11-18). Forced termination can interrupt
+refresh/persistence and require re-login; no loss-free rotation guarantee.
+No strict discovery, OS/filesystem or credential isolation is claimed. Treat
+source/callers as trusted. Prompt-injection guidance is advisory.
+
+Normal registry npm ci uses published unmodified Pi 1.5.2 with exact locked
+host dependencies. Source packages install through native Pi separately.
+No fork, tarballs, unpublished API or publication gate is required.
+See docs/mcp-serving.md.
 
 Generated registration instructions include `--check-auth` (local metadata and
 catalog only) and `--check-auth --resolve` (explicit permission to resolve/refresh
@@ -288,7 +306,8 @@ smoke test requires separate permission.
 Generation adds `.faur-mcp/` (config, pinned npm manifest/lockfile, local
 registration guide and bundled Faur package assets) and a developer-only native
 extension `.pi/extensions/faur-mcp.ts`. Run `npm ci` in `.faur-mcp` first.
-The package remains readable and runs with no checkout links or global binaries.
+The package remains readable with no checkout links or global binary dependency;
+the packaged Pi CLI requires no global Pi binary.
 MCP source/definitions are derived, but every generated asset is hash-checked
 against `.faur-mcp/generated.json` before replacement: an edit conflicts instead
 of being overwritten. The manifest is an edit-preservation mechanism, not an

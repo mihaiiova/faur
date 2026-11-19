@@ -522,7 +522,7 @@ test('unmarked specialist adoption refuses ambiguous prompt sources and stale pr
   mkdirSync(join(root, '.pi/agents'), { recursive: true });
   const front = '---\nname: scout\ndescription: Research\nmodel: fixture/small\ntools:\n  - read\n  - ls\n  - find\n  - grep\n  - codemode\n';
   writeFileSync(join(root, path), `${front}systemPrompt: First\n---\nSecond\n`);
-  assert.throws(() => planAgentAdoption(root, path), /both systemPrompt and body/);
+  assert.throws(() => planAgentAdoption(root, path), /systemPrompt\/body frontmatter/);
   writeFileSync(join(root, path), `${front}---\nResearch\n`);
   const plan = planAgentAdoption(root, path);
   writeFileSync(join(root, path), `${front}---\nChanged after preview\n`);
@@ -1370,7 +1370,7 @@ test('a text-only rebuild is previewed without capability changes', t => {
   assert.deepEqual(plan.rebuild.reach, []);
   writeFileSync(join(root, '.faur/capabilities.json'), '{}\n');
   assert.deepEqual(rebuildPlan(root).rebuild.reach, ['.faur/capabilities.json']);
-  const agent = (tools, prompt) => `---\nname: a\ntools:\n${tools.map(x => `  - ${x}`).join('\n')}\nsystemPrompt: |\n  ${prompt}\n---\n`;
+  const agent = (tools, prompt) => `---\nname: a\ntools:\n${tools.map(x => `  - ${x}`).join('\n')}\n---\n${prompt}\n`;
   assert.equal(changesReach('.pi/agents/a.md', agent(['read'], 'Old.'), agent(['read'], 'New.')), false, 'prompt text only');
   assert.equal(changesReach('.pi/agents/a.md', agent(['read'], 'Old.'), agent(['read', 'bash'], 'Old.')), true, 'tools are reach');
   assert.equal(changesReach('.pi/agents/a.md', undefined, agent(['read'], 'New.')), true, 'a new agent file is reach');

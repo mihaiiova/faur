@@ -1,10 +1,9 @@
 /** Opt-in public operations. No discovery, execution or implicit capability grants. */
 import Ajv from 'ajv';
 
-export const MCP_TOOLS = ['read', 'grep', 'find', 'ls', 'write', 'edit', 'bash'];
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const nonempty = value => typeof value === 'string' && value.trim().length > 0;
-const reservedEnv = /^(PATH|HOME|SHELL|USER|IFS|ENV|BASH_ENV|TMPDIR|NODE_.*|LD_.*|DYLD_.*|PI_.*|FAUR_.*|GIT_.*|PYTHON.*|PERL.*|RUBY.*|HTTPS?_PROXY|ALL_PROXY|NO_PROXY)$/i;
+const reservedEnv = /^(HOME|SHELL|USER|IFS|ENV|BASH_ENV|TMPDIR|NODE_.*|LD_.*|DYLD_.*|PI_.*|FAUR_.*|GIT_.*|PYTHON.*|PERL.*|RUBY.*|HTTPS?_PROXY|ALL_PROXY|NO_PROXY)$/i;
 
 /** Strict draft-07 validation, without coercion, defaults, mutation or remote refs.
  * No format plugins: unsupported formats are rejected during design validation.
@@ -22,9 +21,8 @@ export function mcpServerErrors(server, model) {
     for (const key of Object.keys(value)) if (!allowed.includes(key)) fail(`${path} has unknown key "${key}"`);
   };
   if (!object(server)) return ['document.mcpServer must be an object'];
-  keys(server, ['projectRoot', 'tools', 'env', 'timeoutMs', 'operations', 'auth'], '');
+  keys(server, ['projectRoot', 'env', 'timeoutMs', 'operations', 'auth'], '');
   if (!nonempty(server.projectRoot) || server.projectRoot.includes('\0') || server.projectRoot.startsWith('~')) fail('projectRoot must explicitly name an absolute or agent-folder-relative directory (no ~ expansion)');
-  if (!Array.isArray(server.tools) || server.tools.some(tool => !MCP_TOOLS.includes(tool)) || new Set(server.tools).size !== server.tools.length) fail(`tools must be an explicit unique list drawn from ${MCP_TOOLS.join(', ')}`);
   if (server.env !== undefined && (!Array.isArray(server.env) || server.env.some(name => !/^[A-Z_][A-Z0-9_]*$/.test(name) || reservedEnv.test(name)) || new Set(server.env).size !== server.env.length)) fail('env must be unique environment variable names, not execution/configuration overrides');
   if (server.auth !== undefined) {
     if (!object(server.auth)) fail('auth must be an object');
@@ -34,7 +32,7 @@ export function mcpServerErrors(server, model) {
       if (server.auth.provider !== 'openai-codex') fail('auth.provider must be openai-codex (the supported subscription provider)');
       if (typeof model !== 'string' || model.split('/')[0] !== server.auth.provider) fail('auth.provider must match the orchestrator model provider; no billing/model fallback is allowed');
       const name = server.auth.authFileEnv;
-      if (typeof name !== 'string' || !/^[A-Z_][A-Z0-9_]*$/.test(name) || (reservedEnv.test(name) && !name.startsWith('FAUR_'))) fail('auth.authFileEnv must name a dedicated host-only environment variable, not an execution/configuration override');
+      if (typeof name !== 'string' || name === 'PATH' || !/^[A-Z_][A-Z0-9_]*$/.test(name) || (reservedEnv.test(name) && !name.startsWith('FAUR_'))) fail('auth.authFileEnv must name a dedicated host-only environment variable, not an execution/configuration override');
       if (Array.isArray(server.env) && server.env.includes(name)) fail('auth.authFileEnv must not be included in runtime env grants');
     }
   }

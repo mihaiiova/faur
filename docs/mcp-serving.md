@@ -1,24 +1,32 @@
 # Project-local agents exposed through MCP
 
-Approved 2026-11-16: an optional exception to Faur's maker-only boundary. The
-user wants to call a specialized Pi agent from another coding agent, while
-maintaining its behavior and public operations together. Ordinary/minimal
-projects remain unchanged. No separate Agent Kit package is introduced.
+## Amendment — 2026-11-19: published native Pi, source cwd
 
-## Create
+This supersedes the unpublished source/workspace/project-only experiment of
+2026-11-18 and the reduced runtime/lead-only broker. No Pi or third-party changes,
+forks, tarballs or unpublished APIs are required. The public operation names and
+JSON input schemas are unchanged. Regenerate declarations without the redundant
+`mcpServer.tools` key (strictly rejected). Minimal output is unchanged.
+Specialist prompts/capability guidance are native Markdown bodies, correcting
+the previously ignored YAML `systemPrompt` field; authored edits require explicit
+reconciliation, not migration machinery.
 
-Ask from your main project:
+Independent generated projects pass normal registry `npm ci` with official
+Pi **1.5.2**, MCP SDK **1.32.2**, Ajv **8.20.0**, TypeBox **1.1.24** and YAML
+**2.8.3**. Native packages are explicitly installed separately: pi-subagents
+**0.83.1** and official pi-commands git **v0.1.0**. No global Pi/Faur is needed.
+There is no pending native-API publication prerequisite.
+
+## Declare and generate
 
 > /faur Create Jared in .agents/jared and expose audit and review as MCP tools.
 
-Faur designs the native Pi project and adds this declaration to its
-`.pi/system.yaml` (choose the model with the developer):
+Select its native resources and model in the ordinary design, then add:
 
 ```yaml
 mcpServer:
   projectRoot: ../..
-  tools: [read, grep, find, ls]
-  env: [ANTHROPIC_API_KEY]
+  env: [ANTHROPIC_API_KEY, PATH]
   timeoutMs: 120000
   operations:
     - name: audit
@@ -30,232 +38,185 @@ mcpServer:
         required: [request]
         additionalProperties: false
       prompt: Audit the project according to the supplied request.
-    - name: review
-      description: Review a change in the target project
-      inputSchema:
-        type: object
-        properties:
-          request: { type: string }
-        required: [request]
-        additionalProperties: false
-      prompt: Review the change described by the supplied request.
 ```
 
-These are public capabilities, not internal tools. Each binds a validated JSON
-object to instructions for a fresh execution of the lead. The lead's authored
-`.pi/APPEND_SYSTEM.md` is shared with interactive use; its generated developer
-capability section is excluded. This first slice deliberately does not load
-skills, specialists, arbitrary provider extensions or upstream MCP at runtime.
-The runtime uses Pi's built-in model catalog and, by default, explicitly declared
-provider key variables; it does not inherit global OAuth logins or models.json.
-Optional subscription mode delegates only selected Codex auth, as below.
+Public operations bind validated JSON arguments to a fresh lead execution. They
+are not internal tool exposure. Native tool selection comes from source settings
+and specialists, not a second `mcpServer.tools` list. Operation prompts may invoke
+native `/skill:name` expansion or source prompt templates. User arguments remain
+serialized JSON data; instructions to treat them as data are advisory, not a
+prompt-injection security boundary.
 
-## Install and register
+After normal preview/approval, install locked host dependencies with `npm ci`
+in `.agents/jared/.faur-mcp`. Requires Node.js >=22.19.0 and npm, not global Pi/Faur.
+Review and explicitly install source-declared packages using **native Pi** in S
+before calling the server. Calls preflight native package availability and never
+install missing code. Missing/mismatched packages fail with installation advice.
+Use the packaged Pi CLI, for example from S:
+`node .faur-mcp/node_modules/@earendil-works/pi-coding-agent/dist/cli.js install --local --approve npm:pi-subagents@0.83.1`
+(and the exact other declared package sources). No consumer executable override.
 
-After reviewing and approving the normal generation preview:
+Register locally using the generated README: stdio, absolute Node executable,
+one absolute argument `.agents/jared/.faur-mcp/faur/mcp/host.mjs`. Client-specific
+configuration is the client's responsibility. No automatic/global registration.
+Only explicitly named environment variables plus a small fixed environment reach
+native execution. `PATH` may be explicitly granted for toolchains. HOME, Pi and
+Node loader/config overrides remain refused; ambient secrets are not inherited.
+Never embed credential values or copy auth files into generated assets.
 
-```sh
-cd .agents/jared/.faur-mcp
-npm ci
-```
+## Source S and target T: ordinary native semantics
 
-Requires Node.js 22+ and npm. No global Pi or Faur is needed. Commit the generated
-manifest, lockfile, configuration and assets; node_modules is ignored.
+Each call creates a fresh process/in-memory session with `cwd=S`, a fresh Pi
+config/state directory D and the exact declared model. S is the real source
+folder derived from the installed entry point. T is `mcpServer.projectRoot`
+resolved to an existing absolute directory relative to S. Registration cwd
+selects neither. The target's config is not copied, installed or loaded as a
+workspace; there is no workspace abstraction or custom resource isolation.
 
-Tell your coding agent:
+- Native settings, source models.json/provider registrations, authored lead
+  instructions, skills, templates, packages, extensions, commands, specialist
+  definitions and upstream MCP load normally from S. Ancestor AGENTS.md and
+  skills follow native discovery too. The fresh HOME/config directory omits
+  the operator's normal home settings; it does not make discovery hermetic or
+  exclude all ancestors/explicit paths.
+- Every operation supplies the absolute T and validated JSON arguments through
+  a native before_agent_start task-context message, after native skill/template
+  expansion (including templates without argument placeholders). Arguments are
+  data; prompt-injection guidance is advisory, not an enforcement boundary.
+- Builtin tools, extension tools/pi.exec, commands, default specialist cwd and
+  default upstream stdio MCP cwd remain **S**, not T. Source-relative assets keep
+  native meaning. For target work use absolute paths or shell `cd T`. Pass T
+  explicitly in delegated tasks and command/MCP arguments when needed. This is
+  **ADVISORY**, not sandboxing or automatic path/cwd rebasing.
+- Native child policies are not magical parity: foreground specialists load
+  declared extension resources, not every ambient lead extension. Use native
+  `extensions` metadata (paths relative to the agent file) for authored tools,
+  providers or commands; select skills/context inheritance explicitly as
+  supported by pi-subagents. Background children have different inheritance.
+  Faur does not force custom inheritance or generate resource-path guesses.
+- Bundled developer maintenance code alone opts out before import via an
+  internal runtime environment marker. This is a convenience guard, not a
+  security boundary. Genuine authored extensions load normally.
+- Builtin MCP, codemode and tool_search factories are bound through published
+  `bindExtensions`/session_start. Connections start in the background; first
+  prompts wait up to native limits for direct tools; deferred/codemode calls
+  wait for needed servers. Startup is **not** proof every enabled server
+  connected. Native tool errors/diagnostics and actual calls establish behavior;
+  a model can recover from a tool error. No Faur connection/status manager,
+  human /mcp parsing or unpublished readiness handle exists.
+- Known missing/mismatched packages, discovery and extension errors fail
+  actionable and sanitized when reported by the SDK. Native discovery can skip a
+  nonexistent settings resource path without a diagnostic; this adapter does
+  not add a second discovery validator or claim exhaustive resource readiness.
+  Operations never install code. Disabled/replaced
+  built-in MCP is refused; individual server connection errors follow native
+  behavior, not an all-server startup guarantee.
 
-> Register the MCP server found in .agents/jared locally for this project.
+Fresh sessions prevent conversation reuse, not shared source-local files or
+memory. Operations must keep project-specific state under T. Trusted lead,
+specialists, tools and subprocesses share OS permissions and any selected
+credential store; they can read outside T. No OS/filesystem, credential or
+strict discovery isolation is claimed. Trust S, all resources and callers.
+There is no alternate model/provider/API-billing fallback or global auth
+selection. The packaged official Pi binary is first on child PATH even when
+an explicit toolchain PATH is granted; no ambient global Pi is required.
 
-The generated `.faur-mcp/README.md` supplies transport, exact entry point,
-arguments, environment names and source/target path rules. The client chooses
-its own configuration format; Faur does not register it automatically or modify
-global configuration. Use an absolute Node executable and an absolute path to
-`.agents/jared/.faur-mcp/faur/mcp/host.mjs` as its one argument. An arbitrary
-caller working directory is safe: source paths are entry-point-relative and
-`projectRoot` is agent-source-relative. Store secrets outside committed config,
-using the client's supported environment mechanism. Faur never embeds values.
+## Explicit subscription store
 
-## Reuse a Pi Codex subscription login (since v0.41.0)
-
-The isolated API-key default is unchanged. Choose an `openai-codex/<model-id>` model
-and explicitly opt in:
+Choose `openai-codex/<model>` and opt in:
 
 ```yaml
 mcpServer:
-  # projectRoot, tools, operations as above
-  env: []
+  # projectRoot, operations as above
+  env: [PATH]
   auth:
     mode: pi-subscription
     provider: openai-codex
     authFileEnv: JARED_PI_AUTH_FILE
 ```
 
-In the MCP client's **local server environment**, set `JARED_PI_AUTH_FILE` to the
-absolute path of an existing owner-only Pi auth.json owned by the current user.
-Only the variable name is generated; do not commit its value or credential
-contents. This host-only variable cannot also be a runtime `env` grant. Do not
-copy auth.json, share the whole Pi home, or inherit all environment variables.
-Sign in with `/login openai-codex` in a normal Pi session using that store before
-invoking MCP. Requests never initiate interactive login.
+The client's local environment sets `JARED_PI_AUTH_FILE` to the absolute path of
+an existing owner-only Pi auth.json owned by the current user. Only its variable
+name is generated. The selector variable cannot also be a runtime env grant.
+The host validates ownership/permissions and creates a temporary auth.json
+**symlink**, never a credential copy. Trusted native lead and children directly
+use that selected store, including access to other entries. No lead-only broker
+or credential confidentiality is claimed. Other store-directory configuration
+is not discovered. No automatic login/global auth discovery/API-key fallback.
+Sign in with `/login openai-codex` in a normal Pi session using that store first.
 
-**Accepted trust boundary:** the long-lived host uses Pi's public getAuth API
-and native store. The SDK internally parses the shared file, including other
-provider entries. Only selected resolved Codex request auth crosses private Node
-IPC to the worker; no refresh token or auth-file path reaches it. The worker uses
-public native-provider auth composition and keeps its temporary home, explicit
-tools and resource loader. It loads no global settings, extensions, skills,
-models.json, upstream MCP or unrelated credentials. It never switches to the
-separately billed `openai` provider. See the
-[SDK investigation and decision](research/pi-subscription-auth.md).
+Pi owns native locking, expiry rechecks, refresh and persistence across clients,
+workers and specialists, including symlink aliases. Bounded termination may
+interrupt a started refresh/persistence and require re-login. Do not force-kill
+during refresh; loss-free/crash-durable token rotation is not guaranteed. This
+is intentionally not the old long-lived broker/drain contract.
 
-Native file locking and the under-lock expiry recheck coordinate normal Pi and
-multiple hosts using the same resolved store, including symlink aliases (tested
-with Pi 1.5.2). Cancellation stops lock waiting; a refresh already started must
-finish/persist under Pi's own timeout, even after its caller cancels. Refresh
-therefore belongs in the host, not the killable worker. Invocation timeout and
-cleanup remain bounded as before; **graceful host shutdown drains credential
-writes**. Allow at least 20 seconds in the client's stop grace before force-kill.
-If the client cannot honor that grace, do not use shared-login mode with it.
-SIGKILL, compromised locks, disk failures or ambiguous remote refresh outcomes
-can still require re-login, as with ordinary Pi. Loss-free/crash-durable token
-rotation is not guaranteed.
-
-From the agent source directory:
+Explicit local checks from S (neither makes a model call or logs in):
 
 ```sh
 node .faur-mcp/faur/mcp/host.mjs --check-auth
 node .faur-mcp/faur/mcp/host.mjs --check-auth --resolve
 ```
 
-The first explicitly checks local login/catalog metadata without refresh. The
-second permits native OAuth resolution/refresh (and credential persistence),
-but neither makes a model call or initiates login. An entry's presence is not
-authentication; local resolution does not prove provider/model acceptance.
+The first checks installed catalog/login metadata without refresh; the second
+permits native resolution/refresh. Both use the installed catalog and S's
+`.pi/models.json`, not global models. Source extension models require an actual
+authorized invocation to verify. `/faur check` never reads credentials or
+refreshes automatically: configured, locally resolved and successfully
+exercised are distinct. Ignored `auth-evidence.json` stores only boundary-versioned
+config/source fingerprints and timestamps. Old broker evidence is invalidated.
+History is advisory, not current acceptance, integrity or task-success proof.
 
-The exact model must resolve in the pinned isolated catalog. Developer discovery
-may see a newer cached model or a global override; neither is inherited. Catalog
-incompatibility fails before auth access: choose a compatible model or update/
-regenerate the pinned runtime. Missing source/login, non-private storage and
-expired/failed refresh produce fixed actionable errors, not raw SDK causes.
-There is no model/provider/API-billing fallback.
+## Lifecycle, results and maintenance
 
-`/faur check` does not automatically read global credentials or refresh. It
-separates **configured**, **last resolved locally**, and **last successful model
-invocation**. Ignored `.faur-mcp/auth-evidence.json` holds only config/source
-fingerprints and timestamps, never paths, credentials, prompts or outputs. This
-is historical/advisory evidence, not a current-auth or task-success guarantee or
-a tamper-proof attestation. Configuration/source changes invalidate old evidence.
-Exact selected tokens are redacted from final answers as defense in depth, not
-OS isolation or general exfiltration prevention against trusted same-user tools.
-No live credentials/provider calls are used in tests; a live subscription smoke
-test requires separate permission.
+One active call per host; overlap is refused, not queued. Separate hosts are not
+coordinated. Inputs/worker outputs are bounded to 1 MiB. Fresh sessions prevent
+conversation reuse. Only final answer text is returned, not provider diagnostics,
+logs or extension traces. Model errors and output-length stops are errors, never
+truncated success. Exact granted env values (except non-secret PATH) and observed
+selected login tokens are redacted as defense in depth, not general exfiltration
+prevention.
 
-## Maintain
+Timeout/cancel/EOF/SIGTERM/SIGINT abort native execution, emit session shutdown
+and terminate the worker's POSIX group, escalating after 250ms; same-group
+leftovers are killed on completion too. Windows hosting is refused. Native tools
+own cleanup of separately grouped active subprocesses. Tests prove foreground
+specialist/builtin-shell abort. **Detached background specialists, escaping groups
+and daemons may outlive an operation**; the adapter is not a persistent-work
+supervisor. Do not launch persistent/background work in these calls. Forced
+termination also has the native credential-refresh limitations above.
 
-```sh
-cd .agents/jared
-pi
-# /faur Change review to focus on API compatibility
-```
+Finish active calls before editing/applying. Public config/catalog are captured
+at host startup; source resources load for each fresh call. Restart/reconnect
+after changes; no watcher/hot reload. Reinstall dependencies when pins change.
+Maintain from S with `pi` and `/faur`, or local
+`node .faur-mcp/node_modules/@earendil-works/pi-coding-agent/dist/cli.js`.
+Trust the project; disable duplicate global Faur. Preview/apply, stale checks,
+authored-file conflicts and hash-protected retired-asset removal retain the
+existing lifecycle. Git is rollback. A successful run is not task success.
 
-Without global Pi:
+## Architecture and verification
 
-```sh
-node .faur-mcp/node_modules/@earendil-works/pi-coding-agent/dist/cli.js
-```
-
-Trust the project to load the local developer extension. A global Faur extension
-is unnecessary; disable a duplicate global Faur if present. Public-operation
-changes use `set` target `mcpServer` through the existing model validation,
-preview, stale-file check and apply path. No second writer or lifecycle is added.
-The preview shows public definitions in full and executable library/dependency
-assets by path, action and before/after SHA-256, with the direct dependency pins.
-As with installing a package, approve only trusted Faur source. This bounded
-package-style preview avoids an unreadable full-source/lockfile dump.
-Native authored prompts keep their existing ownership contract. Bundled files
-and operation config are hash-checked against the generated inventory before
-replacement; edited or pre-existing unmarked files conflict. Resolve those edits
-explicitly, or delete only the reviewed file before regeneration. Retired bundle
-files are removed only when the prior manifest proves their bytes unchanged.
-Set `mcpServer` to null in a maintenance operation to remove the interface;
-installed dependencies remain on disk with their ignore rule (delete them
-manually if no longer needed).
-
-Finish active calls **before editing or applying maintenance**, then restart and
-reconnect the server. It captures the catalog and prompt at startup; no hot
-reload or file watcher. Each server permits one active call, rejects overlap and
-has no queue. Separate server processes are not coordinated. Re-run npm ci if
-the locked dependencies changed. Git is the rollback mechanism.
-
-## Hosting and security
-
-- `mcp/host.mjs` uses the maintained MCP SDK for stdio protocol handling;
-  `mcp/worker.mjs` delegates execution to Pi's SDK. No agent loop is implemented.
-- Every operation shares schema validation, invocation, timeout/cancellation,
-  child cleanup and result mapping. Success returns only final answer text;
-  model/provider/internal errors return a generic error, not raw stderr.
-- Worker stdout is captured separately from MCP stdout. Logs are not returned.
-  Invocation input and worker output are bounded to 1 MiB.
-- Runtime uses an explicit custom SDK resource loader and in-memory settings and
-  sessions. It does not discover project/global settings, extensions, packages,
-  skills or parent instructions. By default it reads no developer credentials;
-  optional subscription mode supplies selected request auth through the broker.
-  Its home and agent
-  directory are temporary; only explicitly named variables plus a small fixed
-  execution environment reach it. No provider catalog network refresh occurs.
-- This is **enforced configuration isolation**, not OS isolation. Tools still
-  have the OS account's permissions. Read can access paths outside the target;
-  bash can access credential files or spawn escaping processes. Allowed tools
-  share the call's credentials. Prompt instructions are advisory. Use trusted
-  projects/callers; this is not a sandbox for hostile code or tenants.
-- Exact declared environment values are redacted from returned answer text as
-  defense in depth. This is not general secret detection or exfiltration
-  prevention. Never send credentials as operation inputs.
-- On timeout/cancel/shutdown the worker's POSIX process group receives SIGTERM,
-  then SIGKILL after 250ms if needed. Same-group leftovers are killed after
-  normal completion too. Hosting refuses Windows rather than weakening cleanup.
-  Pi's session abort also cancels active built-in tools, including shell groups.
-  Shell commands that deliberately background/detach work can outlive their tool
-  invocation; supervising daemons or escaped process groups is outside this
-  guarantee. Do not use these calls to launch persistent background work.
-- SDK run success is not task success: read the answer to judge the audit/review.
-
-## Distribution decision
-
-Plain Pi configuration and upstream MCP integrations connect to servers; they
-do not expose an agent's declared capabilities as a server. A skill alone cannot
-provide the enforced validation/process/protocol boundary. The MCP SDK and Pi
-SDK supply those primitives; Faur adds only their adapter and declarations.
-Ajv supplies strict draft-07 validation rather than a handwritten schema subset.
-
-Faur's current package is private and Git-distributed. Pinning a published Faur
-runtime would assume a release that does not exist. Instead the generator bundles
-ordinary Faur package assets under `.faur-mcp/faur/`, including the canonical
-host, maker modules, extension and skill. These are distribution copies from one
-implementation, not per-agent server templates or independent forks. The exact
-Pi/MCP/schema dependencies and their transitive resolutions are locked. Nothing
-points at a developer checkout. The package can maintain itself using the same
-code paths. There is no snapshot/publishing/version-selection system.
-
-## Verification
+Native Pi owns execution/discovery/delegation/packages/auth/MCP connections. The
+MCP SDK owns stdio protocol; Ajv supplies strict draft-07 validation. Faur adds
+only the public declaration/process adapter, not an agent loop, resource loader,
+package manager or second MCP client. Source cwd plus absolute target task
+instructions intentionally does not enforce target cwd or path containment.
 
 ```sh
 bash test/test.sh
-RUN_FAUR_MCP_TEST=1 node --test test/mcp-server.test.mjs test/mcp-auth.test.mjs
-npm audit --prefix mcp
+RUN_FAUR_MCP_TEST=1   node --test test/mcp-server.test.mjs
+RUN_FAUR_MCP_TEST=1   node --test test/mcp-native.test.mjs
+RUN_FAUR_MCP_TEST=1   node --test test/mcp-auth.test.mjs
 ```
 
-The opt-in integration gate installs into a separate temporary project (paths
-contain spaces), uses only its local dependencies and absolute Node executable,
-and points real Pi at a local deterministic Azure-compatible fixture. It lists
-and invokes audit/review over real MCP stdio, checks invalid input, generic
-execution failure, overlap, cancellation/reuse, timeout, restart/catalog/behavior
-updates and actual Pi RPC discovery of `/faur`. CLI first-generation approval, retired
-bundle cleanup, symlinked entry paths and stdin-EOF shutdown have regressions.
-A deterministic worker fixture checks environment filtering, secret redaction,
-temporary-home deletion and same-group descendant cleanup. A real Pi bash tool
-call proves active detached shell-group cancellation on stdin EOF. Provider requests prove developer
-instructions/extensions/tools are not inherited. No paid-provider credits.
-
-Real provider quality, interactive human TUI editing and individual third-party
-client registration flows remain live/manual checks, not claims made by this gate.
+The sequential gates use independent generated projects, installed local Pi,
+local fake models/credentials and real external MCP stdio. They exercise source
+instructions/skill/template expansion, actual specialist prompts/tools, extension
+execution, native commands/upstream MCP, two targets, ordinary ancestor discovery, strict
+failure paths, auth refresh/locking/direct child store access, command approvals,
+malformed input, model errors/length, protocol stdout, restart/catalog, bounded
+cancellation/foreground-child cleanup and maker approval/state protections.
+The tests use registry npm ci and explicit native package installation only. No paid provider or real credential
+reads. Source/global custom third-party behavior, escaped/background processes,
+provider quality and individual client registration remain unverified/manual.

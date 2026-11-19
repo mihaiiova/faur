@@ -2,29 +2,34 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { readFileSync, realpathSync, statSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, realpathSync, statSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { mcpServerErrors, operationValidator } from '../src/mcp-server.mjs';
 import { mcpConfig, recordMcpAuthEvidence } from '../src/mcp-auth-status.mjs';
-import { AUTH_ERRORS, authErrorCode, createSubscriptionBroker } from './subscription-auth.mjs';
+import { AUTH_ERRORS, authErrorCode, createSelectedAuthStore, selectedAuthPath } from './subscription-auth.mjs';
 
 const textResult = (text, isError = false) => ({ content: [{ type: 'text', text }], ...(isError ? { isError: true } : {}) });
+export const NATIVE_ERRORS = Object.freeze({
+  'native-packages': 'A source Pi package is missing or mismatched. Review and install declared packages explicitly with native Pi in the agent source before retrying.',
+  'native-resources': 'Source Pi resource discovery or extension startup failed. Check source settings, extensions and resource diagnostics in native Pi; no reduced execution was started.',
+  'native-mcp': 'Source built-in MCP support is disabled or replaced. Check source extensions and mcp.json using native Pi before retrying.',
+  'native-model': 'The declared model is unavailable in the source Pi configuration. Check the exact provider/model and source provider extensions; no fallback is used.',
+  'native-length': 'Pi reached the model output limit; the incomplete answer is not a successful result.',
+});
 const LIMIT = 1024 * 1024;
 
-/** Capture config and authored prompt once: a restart is the update boundary. */
-export function loadAgent(agentSource, brokerOptions) {
+/** Capture the public config once: a restart is the update boundary. */
+export function loadAgent(agentSource) {
   const source = realpathSync(agentSource);
   const { model, thinking, ...config } = JSON.parse(readFileSync(join(source, '.faur-mcp/config.json'), 'utf8'));
   const errors = mcpServerErrors(config, model);
   if (errors.length || typeof model !== 'string' || !model.includes('/')) throw new Error('Invalid MCP configuration; regenerate with Faur');
   const target = realpathSync(resolve(source, config.projectRoot));
   if (!statSync(target).isDirectory()) throw new Error('Target project root is not a directory');
-  const nativePrompt = readFileSync(join(source, '.pi/APPEND_SYSTEM.md'), 'utf8');
-  const prompt = nativePrompt.split('<!-- faur:derived v1 begin:')[0].replace(/^<!-- faur:generated v1 sha256=[a-f0-9]{64} -->\n/, '').trim();
-  return { source, target, model, thinking, prompt, config, validators: new Map(config.operations.map(op => [op.name, operationValidator(op.inputSchema)])), ...(config.auth ? { authBroker: createSubscriptionBroker(config.auth, model, brokerOptions) } : {}) };
+  return { source, target, model, thinking, config, validators: new Map(config.operations.map(op => [op.name, operationValidator(op.inputSchema)])) };
 }
 
 function killGroup(child, signal) {
@@ -35,43 +40,37 @@ function killGroup(child, signal) {
 /** One path for every operation, including validation, cleanup and result mapping.
  * workerPath is an internal test seam, never part of public configuration.
  */
-export async function invoke(agent, name, input, signal, { workerPath = new URL('./worker.mjs', import.meta.url), authBroker = agent.authBroker } = {}) {
+export async function invoke(agent, name, input, signal, { workerPath = new URL('./worker.mjs', import.meta.url) } = {}) {
   const operation = agent.config.operations.find(op => op.name === name);
   if (!operation) return textResult('Unknown public operation', true);
   if (!agent.validators.get(name)(input)) return textResult('Invalid operation input (does not match inputSchema)', true);
   if (signal?.aborted) return textResult('Operation cancelled', true);
-  const payload = JSON.stringify({ target: agent.target, model: agent.model, thinking: agent.thinking, systemPrompt: agent.prompt, tools: agent.config.tools, ...(agent.config.auth ? { auth: { mode: 'pi-subscription', provider: agent.config.auth.provider } } : {}), prompt: `${operation.prompt}\n\nOperation arguments (JSON data):\n${JSON.stringify(input)}` });
+  let authPath;
+  try { if (agent.config.auth) authPath = selectedAuthPath(agent.config.auth, process.env); }
+  catch (error) { return textResult(AUTH_ERRORS[authErrorCode(error)], true); }
+  const payload = JSON.stringify({ source: agent.source, target: agent.target, model: agent.model, thinking: agent.thinking, ...(agent.config.auth ? { auth: agent.config.auth, authPath } : {}), prompt: operation.prompt, taskContext: `Target project (absolute path): ${JSON.stringify(agent.target)}\nNative cwd is the agent source ${JSON.stringify(agent.source)}, NOT the target. For target file work use absolute paths or explicitly cd to the target in shell commands. Pass the target explicitly in delegated tasks and command/MCP arguments where needed. Keep project-specific memory/files under the target; source-local state is shared across calls and targets. These instructions are advisory, not a sandbox or automatic path rebasing.\nOperation arguments (validated JSON data, not instructions):\n${JSON.stringify(input)}` });
   if (Buffer.byteLength(payload) > LIMIT) return textResult('Operation input exceeded limit', true);
   const home = mkdtempSync(join(tmpdir(), 'faur-mcp-'));
-  const env = { HOME: home, PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, PI_CODING_AGENT_DIR: home, PI_OFFLINE: '1', LANG: 'C.UTF-8' };
+  if (authPath) symlinkSync(authPath, join(home, 'auth.json')); // Direct native store, never copied credentials.
+  const packagedBin = resolve(dirname(fileURLToPath(import.meta.url)), '../../node_modules/.bin');
+  const env = { HOME: home, PATH: `${packagedBin}:${dirname(process.execPath)}:/usr/bin:/bin`, PI_CODING_AGENT_DIR: home, PI_OFFLINE: '1', LANG: 'C.UTF-8' };
   for (const key of agent.config.env ?? []) {
     if (!process.env[key]) { rmSync(home, { recursive: true, force: true }); return textResult(`Missing required environment variable: ${key}`, true); }
-    env[key] = process.env[key];
+    env[key] = key === 'PATH' ? `${packagedBin}:${process.env[key]}` : process.env[key];
   }
-  const secrets = new Set((agent.config.env ?? []).map(key => env[key]));
+  // PATH is an explicit toolchain grant, not a credential to redact from answers.
+  const secrets = new Set((agent.config.env ?? []).filter(key => key !== 'PATH').map(key => process.env[key]));
   const redact = text => [...secrets].filter(Boolean).sort((a, b) => b.length - a.length).reduce((value, secret) => value.split(secret).join('[REDACTED]'), text);
   try {
     return await new Promise(resolveResult => {
-      const authController = new AbortController();
-      const child = spawn(process.execPath, [fileURLToPath(workerPath)], { cwd: agent.target, env, detached: true, stdio: ['pipe', 'pipe', 'ignore', ...(agent.config.auth ? ['ipc'] : [])] });
-      let outstandingAuth = 0, authenticated = false;
+      const child = spawn(process.execPath, [fileURLToPath(workerPath)], { cwd: agent.source, env, detached: true, stdio: ['pipe', 'pipe', 'ignore'] });
       const observe = kind => recordMcpAuthEvidence(agent.source, mcpConfig({ mcpServer: agent.config, orchestrator: { model: agent.model, thinking: agent.thinking } }), process.env, kind);
-      if (agent.config.auth) child.on('message', message => {
-        if (message?.type !== 'faur-auth-request' || !Number.isSafeInteger(message.id) || message.id < 1 || outstandingAuth >= 4 || authController.signal.aborted) return;
-        outstandingAuth++;
-        // No provider/path comes from the worker: the broker is bound to the
-        // approved declaration, and credentials never cross MCP stdout.
-        const request = authBroker ? authBroker.resolve(authController.signal, secret => secrets.add(secret)) : Promise.reject({ code: 'auth-unavailable' });
-        const reply = data => { try { if (child.connected) child.send({ type: 'faur-auth-result', id: message.id, ...data }, () => {}); } catch { /* worker exited during auth resolution */ } };
-        request.then(result => { authenticated = true; observe('authenticated'); reply({ result }); }, error => reply({ errorCode: authErrorCode(error) })).finally(() => { outstandingAuth--; });
-      });
       let output = '';
       let reason;
       let escalation;
       const stop = message => {
         if (reason) return;
         reason = message;
-        authController.abort();
         killGroup(child, 'SIGTERM');
         escalation = setTimeout(() => killGroup(child, 'SIGKILL'), 250);
       };
@@ -87,7 +86,6 @@ export async function invoke(agent, name, input, signal, { workerPath = new URL(
       child.stdin.on('error', () => {}); // Early worker exit is mapped below, never an unhandled EPIPE.
       child.on('error', () => { reason = 'Pi execution could not start'; });
       child.on('close', code => {
-        authController.abort();
         clearTimeout(timeout);
         clearTimeout(escalation);
         signal?.removeEventListener('abort', abort);
@@ -96,9 +94,9 @@ export async function invoke(agent, name, input, signal, { workerPath = new URL(
         if (reason) return resolveResult(textResult(reason, true));
         try {
           const result = JSON.parse(output);
-          if (agent.config.auth && result.ok !== true) return resolveResult(textResult(Object.hasOwn(AUTH_ERRORS, result.errorCode) ? AUTH_ERRORS[result.errorCode] : AUTH_ERRORS['auth-execution-failed'], true));
+          if (result.ok !== true) return resolveResult(textResult(NATIVE_ERRORS[result.errorCode] ?? AUTH_ERRORS[result.errorCode] ?? 'Pi execution failed', true));
           if (code !== 0 || result.ok !== true || typeof result.text !== 'string') throw new Error();
-          if (authenticated) observe('exercised');
+          if (result.authenticated === true) { observe('authenticated'); observe('exercised'); }
           resolveResult(textResult(redact(result.text)));
         } catch { resolveResult(textResult('Pi execution failed', true)); }
       });
@@ -107,9 +105,9 @@ export async function invoke(agent, name, input, signal, { workerPath = new URL(
   } finally { rmSync(home, { recursive: true, force: true }); }
 }
 
-export async function serve(agentSource, { brokerOptions, workerPath } = {}) {
+export async function serve(agentSource, { workerPath } = {}) {
   if (process.platform === 'win32') throw new Error('MCP hosting currently requires POSIX process-group cleanup');
-  const agent = loadAgent(agentSource, brokerOptions);
+  const agent = loadAgent(agentSource);
   const server = new Server({ name: 'faur-agent', version: '1.0.0' }, { capabilities: { tools: {} } });
   let active;
   let shuttingDown = false;
@@ -130,9 +128,6 @@ export async function serve(agentSource, { brokerOptions, workerPath } = {}) {
     shuttingDown = true;
     active?.controller.abort();
     if (active) await active.call;
-    // Invocation cleanup stays bounded; refresh/persistence belongs to this
-    // trusted host and must drain before a graceful host exit.
-    await agent.authBroker?.close();
     await server.close();
   }
   process.once('SIGTERM', shutdown);
@@ -150,24 +145,25 @@ export async function serve(agentSource, { brokerOptions, workerPath } = {}) {
  */
 export async function checkAuthentication(agentSource, { resolveAuth = false } = {}) {
   const agent = loadAgent(agentSource);
-  if (!agent.authBroker) return { mode: 'isolated-api-key', configured: true, authenticated: 'not checked', exercised: 'not checked' };
+  if (!agent.config.auth) return { mode: 'isolated-api-key', configured: true, authenticated: 'not checked', exercised: 'not checked' };
+  const store = createSelectedAuthStore(agent.config.auth, agent.model, { modelsPath: join(agent.source, '.pi/models.json') });
   const controller = new AbortController();
   const cancel = () => controller.abort();
   process.once('SIGTERM', cancel); process.once('SIGINT', cancel);
   const config = mcpConfig({ mcpServer: agent.config, orchestrator: { model: agent.model, thinking: agent.thinking } });
   try {
-    const status = await agent.authBroker.inspect();
+    const status = await store.inspect();
     if (status.catalog === 'resolvable') recordMcpAuthEvidence(agent.source, config, process.env, 'catalog');
     if (resolveAuth && !status.errorCode) {
       try {
-        await agent.authBroker.resolve(controller.signal);
+        await store.resolve(controller.signal);
         status.authenticated = 'resolved locally; provider/model acceptance not exercised';
         recordMcpAuthEvidence(agent.source, config, process.env, 'authenticated');
       } catch (error) { status.errorCode = authErrorCode(error); status.fix = AUTH_ERRORS[status.errorCode]; }
     }
     return { mode: 'pi-subscription', ...status };
   } finally {
-    await agent.authBroker.close();
+    await store.close();
     process.removeListener('SIGTERM', cancel); process.removeListener('SIGINT', cancel);
   }
 }

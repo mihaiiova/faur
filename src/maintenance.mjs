@@ -71,7 +71,7 @@ export function subagentRuns(root, limit = 50) {
 }
 const MCP_NATIVE_FIELDS = new Set(['type', 'command', 'args', 'env', 'cwd', 'url', 'headers', 'oauth', 'auth', 'description', 'timeout', 'enabled', 'exposure', 'toolExposure']);
 const COMMAND_NATIVE_FIELDS = new Set(['name', 'description', 'command', 'args', 'approve', 'lead']);
-const AGENT_NATIVE_FIELDS = new Set(['name', 'description', 'tools', 'model', 'thinking', 'skills', 'inheritProjectContext', 'inheritSkills', 'async', 'systemPrompt']);
+const AGENT_NATIVE_FIELDS = new Set(['name', 'description', 'tools', 'model', 'thinking', 'skills', 'inheritProjectContext', 'inheritSkills', 'async']);
 
 /** Identify native-only keys and project resources without returning their values. */
 function nativeUnrepresented(root, model, settings, mcpJson) {
@@ -302,6 +302,17 @@ export function planPromptAdoption(root) {
   return plan;
 }
 
+/** Native specialists execute Markdown bodies. The returned body is an internal
+ * comparison field only; it is never serialized into native frontmatter. */
+function managedSpecialist(text) {
+  const front = text?.match(/^---\n([\s\S]*?)\n---\n([\s\S]*?)\n?<!-- faur:generated v1 sha256=[0-9a-f]{64} -->\s*$/);
+  if (!front) throw new Error('Cannot safely merge an unmarked specialist or extra content');
+  const fields = loadYaml().parse(front[1]);
+  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) throw new Error('Invalid specialist frontmatter');
+  if (Object.hasOwn(fields, 'systemPrompt') || Object.hasOwn(fields, 'body')) throw new Error('Specialist systemPrompt/body frontmatter is not native prompt text; regenerate or explicitly reconcile it into the Markdown body');
+  return { ...fields, body: front[2].replace(/^\n/, '').replace(/\n+$/, '') + '\n' };
+}
+
 /** Import an authored Pi specialist without rewriting its native definition. */
 /** Adopting native tools that drop part of the browsing baseline cannot be
  * represented: the design would add them back. Refuse, and say so. */
@@ -315,10 +326,9 @@ function planUnmarkedAgentAdoption(root, path, name, oldModel, text) {
   if (!match) throw new Error('Specialist needs YAML frontmatter to adopt; its native file is preserved');
   const native = loadYaml().parse(match[1]);
   if (!native || typeof native !== 'object' || Array.isArray(native) || native.name !== name || typeof native.description !== 'string' || !Array.isArray(native.tools)) throw new Error('Specialist needs matching name, description and an explicit tools list to adopt');
-  if (native.systemPrompt !== undefined && typeof native.systemPrompt !== 'string') throw new Error('Specialist systemPrompt must be text');
-  if (native.systemPrompt !== undefined && match[2].trim()) throw new Error('Specialist has both systemPrompt and body; preserve it until their runtime precedence is resolved');
+  if (Object.hasOwn(native, 'systemPrompt') || Object.hasOwn(native, 'body')) throw new Error('Specialist systemPrompt/body frontmatter is not native prompt text; preserve and explicitly reconcile the Markdown body');
   assertBaselineAdoptable(native.tools, `${path} tools`);
-  const candidate = { name, description: native.description, tools: native.tools, prompt: native.systemPrompt ?? match[2] };
+  const candidate = { name, description: native.description, tools: native.tools, prompt: match[2] };
   for (const key of ['model', 'thinking', 'skills', 'inheritProjectContext', 'inheritSkills']) if (native[key] !== undefined) candidate[key] = native[key];
   const opts = { piPackages: pinsAt(root), contextFiles: skippedContextFiles(root) };
   const generated = generateProject({ ...oldModel, agents: [...(oldModel.agents ?? []), candidate] }, {}, opts).files.find(file => file.path === path)?.content;
@@ -335,7 +345,7 @@ function planUnmarkedAgentAdoption(root, path, name, oldModel, text) {
   delete plan.writes[path];
   delete plan.generatedModes[path];
   plan.preview.files = plan.preview.files.filter(file => file.path !== path);
-  const known = new Set(['name', 'description', 'tools', 'model', 'thinking', 'skills', 'inheritProjectContext', 'inheritSkills', 'async', 'systemPrompt']);
+  const known = new Set(['name', 'description', 'tools', 'model', 'thinking', 'skills', 'inheritProjectContext', 'inheritSkills', 'async', 'body']);
   const unrepresented = Object.keys(native).filter(key => !known.has(key));
   plan.preview.adoption = { path, unrepresented, note: 'The native specialist remains authoritative and unchanged; unrepresented frontmatter is preserved. Regeneration would add Faur capability instructions, so later conflicting edits require explicit reconciliation.' };
   return plan;
@@ -350,20 +360,19 @@ export function planAgentAdoption(root, path) {
   const agent = (oldModel.agents ?? []).find(item => item.name === match[1]);
   if (!agent) {
     const text = readText(root, path);
-    const front = text?.match(/^---\n([\s\S]*?)\n---\n\n?<!-- faur:generated v1 sha256=[0-9a-f]{64} -->\s*$/);
-    if (!front) return planUnmarkedAgentAdoption(root, path, match[1], oldModel, text);
-    const native = loadYaml().parse(front[1]);
-    const keys = ['name', 'description', 'tools', 'model', 'thinking', 'skills', 'inheritProjectContext', 'inheritSkills', 'async', 'systemPrompt'];
-    if (!native || Object.keys(native).some(key => !keys.includes(key)) || native.name !== match[1] || !Array.isArray(native.tools) || typeof native.systemPrompt !== 'string') throw new Error('New specialist has unsupported frontmatter; preserve and reconcile it explicitly');
+    if (!/<!-- faur:generated v1 sha256=[0-9a-f]{64} -->\s*$/.test(text ?? '')) return planUnmarkedAgentAdoption(root, path, match[1], oldModel, text);
+    const native = managedSpecialist(text);
+    const keys = ['name', 'description', 'tools', 'model', 'thinking', 'skills', 'inheritProjectContext', 'inheritSkills', 'async', 'body'];
+    if (!native || Object.keys(native).some(key => !keys.includes(key)) || native.name !== match[1] || !Array.isArray(native.tools) || typeof native.body !== 'string') throw new Error('New specialist has unsupported frontmatter; preserve and reconcile it explicitly');
     assertBaselineAdoptable(native.tools, `${path} tools`);
     const candidate = { name: native.name, description: native.description, tools: native.tools, prompt: '' };
     for (const key of ['model', 'thinking', 'skills', 'inheritProjectContext', 'inheritSkills']) if (native[key] !== undefined) candidate[key] = native[key];
     const opts = { piPackages: pinsAt(root), contextFiles: skippedContextFiles(root) };
     const generated = item => generateProject({ ...oldModel, agents: [...(oldModel.agents ?? []), item] }, {}, opts).files.find(file => file.path === path)?.content;
-    const parseGenerated = content => loadYaml().parse(content.match(/^---\n([\s\S]*?)\n---\n/)[1]);
-    const suffix = parseGenerated(generated(candidate)).systemPrompt ?? '';
-    if (suffix && !native.systemPrompt.endsWith(suffix)) throw new Error('New specialist has unsupported generated instructions; preserve and reconcile them explicitly');
-    candidate.prompt = suffix ? native.systemPrompt.slice(0, -suffix.length).replace(/\n+$/, '') : native.systemPrompt;
+    const parseGenerated = managedSpecialist;
+    const suffix = parseGenerated(generated(candidate)).body ?? '';
+    if (suffix && !native.body.endsWith(suffix)) throw new Error('New specialist has unsupported generated instructions; preserve and reconcile them explicitly');
+    candidate.prompt = suffix ? native.body.slice(0, -suffix.length).replace(/\n+$/, '') : native.body;
     if (!isDeepStrictEqual(parseGenerated(generated(candidate)), native)) throw new Error('New specialist grants or instructions cannot be represented without changing behavior');
     const differences = nativeDrift(root, oldModel);
     const plan = planChange(root, [{ op: 'add', target: 'agent', name: candidate.name, value: candidate }], { adoptExistingPath: path });
@@ -383,25 +392,21 @@ export function planAgentAdoption(root, path) {
     plan.preview.adoption = { path, note: 'Adopt the specialist deletion; dependent declarations must remain valid.' };
     return plan;
   }
-  const parse = text => {
-    const front = text?.match(/^---\n([\s\S]*?)\n---\n\n?<!-- faur:generated v1 sha256=[0-9a-f]{64} -->\s*$/);
-    if (!front) throw new Error('Cannot safely adopt an unmarked agent or an agent with extra content');
-    return loadYaml().parse(front[1]);
-  };
+  const parse = managedSpecialist;
   const native = parse(readText(root, path));
   const opts = { piPackages: pinsAt(root), contextFiles: skippedContextFiles(root) };
   const clean = generateProject(oldModel, {}, opts).files.find(file => file.path === path);
   const original = parse(clean?.content);
-  const keys = ['name', 'description', 'tools', 'model', 'thinking', 'skills', 'inheritProjectContext', 'inheritSkills', 'async', 'systemPrompt'];
+  const keys = ['name', 'description', 'tools', 'model', 'thinking', 'skills', 'inheritProjectContext', 'inheritSkills', 'async', 'body'];
   if (!native || Object.keys(native).some(key => !keys.includes(key)) || native.name !== agent.name) throw new Error('Agent has unsupported frontmatter; preserve and reconcile it explicitly');
   for (const key of ['tools', 'skills', 'inheritProjectContext', 'inheritSkills', 'async']) {
     if (!isDeepStrictEqual(native[key], original[key])) throw new Error(key === 'async' ? 'Agent async differs; Faur no longer sets a launch mode. Preserve it or remove async from the native agent file before retrying.' : `Agent ${key} changes require explicit reconciliation of capabilities`);
   }
   const oldPrompt = (agent.prompt ?? '').replace(/\n+$/, '');
-  const generated = original.systemPrompt ?? '';
+  const generated = original.body ?? '';
   if (oldPrompt && !generated.startsWith(oldPrompt)) throw new Error('Cannot separate generated agent instructions');
   const suffix = generated.slice(oldPrompt.length);
-  const content = native.systemPrompt ?? '';
+  const content = native.body ?? '';
   if (typeof content !== 'string' || (suffix && !content.endsWith(suffix))) throw new Error('Generated agent instructions were edited; reconcile them explicitly');
   const prompt = suffix ? content.slice(0, -suffix.length) : content;
   const next = { ...agent, description: native.description, prompt };
@@ -487,18 +492,16 @@ export function planNativeReapply(root, path) {
       if (!/^<!-- faur:generated v1 sha256=[0-9a-f]{64} -->\n/.test(before) || offset < 0 || cleanOffset < 0) throw new Error('Cannot safely separate the authored lead prompt; preserve and reconcile it explicitly');
       desired = clean.slice(0, cleanOffset) + before.slice(offset);
     } else {
-      const front = before.match(/^---\n([\s\S]*?)\n---\n\n?<!-- faur:generated v1 sha256=[0-9a-f]{64} -->\s*$/);
-      if (!front) throw new Error('Cannot safely reapply an unmarked specialist or extra content');
-      const native = loadYaml().parse(front[1]);
-      const keys = ['name', 'description', 'tools', 'model', 'thinking', 'skills', 'inheritProjectContext', 'inheritSkills', 'async', 'systemPrompt'];
+      const native = managedSpecialist(before);
+      const keys = ['name', 'description', 'tools', 'model', 'thinking', 'skills', 'inheritProjectContext', 'inheritSkills', 'async', 'body'];
       if (!native || native.name !== agentName || Object.keys(native).some(key => !keys.includes(key))) throw new Error('Specialist contains unsupported frontmatter; preserve and reconcile it explicitly');
-      const recorded = loadYaml().parse(clean.match(/^---\n([\s\S]*?)\n---\n/)[1]);
+      const recorded = managedSpecialist(clean);
       const agent = model.agents.find(item => item.name === agentName);
       const oldPrompt = (agent.prompt ?? '').replace(/\n+$/, '');
-      const generatedPrompt = recorded.systemPrompt ?? '';
+      const generatedPrompt = recorded.body ?? '';
       if (oldPrompt && !generatedPrompt.startsWith(oldPrompt)) throw new Error('Cannot separate generated specialist instructions');
       const suffix = generatedPrompt.slice(oldPrompt.length);
-      if (typeof native.systemPrompt !== 'string' || (suffix && !native.systemPrompt.endsWith(suffix))) throw new Error('Specialist generated instructions were edited; preserve and reconcile them explicitly');
+      if (typeof native.body !== 'string' || (suffix && !native.body.endsWith(suffix))) throw new Error('Specialist generated instructions were edited; preserve and reconcile them explicitly');
       desired = clean;
     }
   }
@@ -549,9 +552,7 @@ export function planAgentReconciliation(root, path, adopt) {
   const agent = (oldModel.agents ?? []).find(item => item.name === match[1]);
   if (!agent) throw new Error('Specialist is not represented in the design');
   const parse = value => {
-    const front = value?.match(/^---\n([\s\S]*?)\n---\n\n?<!-- faur:generated v1 sha256=[0-9a-f]{64} -->\s*$/);
-    if (!front) throw new Error('Cannot safely merge an unmarked specialist or extra content');
-    const data = loadYaml().parse(front[1]);
+    const data = managedSpecialist(value);
     if (!data || typeof data !== 'object' || Array.isArray(data) || data.name !== agent.name) throw new Error('Invalid specialist frontmatter');
     return data;
   };
@@ -562,13 +563,13 @@ export function planAgentReconciliation(root, path, adopt) {
     if (!isDeepStrictEqual(native[key], original[key])) throw new Error(key === 'async' ? 'Specialist async differs; Faur no longer sets a launch mode. Preserve it or remove async from the native agent file before retrying.' : `Specialist ${key} differs from the design; preserve it and reconcile capabilities explicitly`);
   }
   const oldPrompt = (agent.prompt ?? '').replace(/\n+$/, '');
-  const generated = original.systemPrompt ?? '';
+  const generated = original.body ?? '';
   if (oldPrompt && !generated.startsWith(oldPrompt)) throw new Error('Cannot separate generated specialist instructions');
   const suffix = generated.slice(oldPrompt.length);
-  if (typeof native.systemPrompt !== 'string' || (suffix && !native.systemPrompt.endsWith(suffix))) throw new Error('Edited generated specialist instructions cannot be reconciled safely');
+  if (typeof native.body !== 'string' || (suffix && !native.body.endsWith(suffix))) throw new Error('Edited generated specialist instructions cannot be reconciled safely');
   const next = { ...agent };
   for (const field of adopt) {
-    if (field === 'prompt') next.prompt = suffix ? native.systemPrompt.slice(0, -suffix.length) : native.systemPrompt;
+    if (field === 'prompt') next.prompt = suffix ? native.body.slice(0, -suffix.length) : native.body;
     else if (typeof native[field] === 'string') next[field] = native[field];
     else throw new Error(`Cannot adopt missing or invalid specialist ${field}`);
   }
@@ -691,23 +692,18 @@ export function planChange(root, operations, options = {}) {
   if (plan.errors.length) throw new Error(plan.errors.join('\n'));
   if (options.reconcileAgent) {
     const path = options.reconcileAgent;
-    const parse = value => {
-      const match = value?.match(/^---\n([\s\S]*?)\n---\n\n?<!-- faur:generated v1 sha256=[0-9a-f]{64} -->\s*$/);
-      if (!match) throw new Error('Cannot safely merge an unmarked specialist or extra content');
-      const data = loadYaml().parse(match[1]);
-      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Invalid specialist frontmatter');
-      return data;
-    };
+    const parse = managedSpecialist;
     const source = parse(existing[path]);
     const desiredFile = generateProject(model, {}, opts).files.find(file => file.path === path);
     if (!desiredFile) throw new Error('Selected specialist is not represented');
     const desired = parse(desiredFile.content);
     if (source.name !== desired.name) throw new Error('Specialist name mismatch');
-    const known = ['name', 'description', 'tools', 'model', 'thinking', 'skills', 'inheritProjectContext', 'inheritSkills', 'async', 'systemPrompt'];
+    const known = ['name', 'description', 'tools', 'model', 'thinking', 'skills', 'inheritProjectContext', 'inheritSkills', 'async', 'body'];
     const extra = Object.keys(source).filter(key => !known.includes(key));
     if (extra.some(key => ['__proto__', 'constructor', 'prototype'].includes(key))) throw new Error('Unsafe specialist frontmatter key');
     for (const key of extra) desired[key] = source[key];
-    const content = extra.length ? `---\n${loadYaml().stringify(desired).replace(/\n$/, '')}\n---\n\n${desiredFile.content.match(/<!-- faur:generated v1 sha256=[0-9a-f]{64} -->/)[0]}\n` : desiredFile.content;
+    const { body, ...fields } = desired;
+    const content = extra.length ? `---\n${loadYaml().stringify(fields).replace(/\n$/, '')}\n---\n\n${body}\n${desiredFile.content.match(/<!-- faur:generated v1 sha256=[0-9a-f]{64} -->/)[0]}\n` : desiredFile.content;
     const index = plan.files.findIndex(file => file.path === path);
     if (index < 0) throw new Error('Selected specialist is not in the generated plan');
     plan.files[index] = { path, content, action: content === existing[path] ? 'none' : 'write' };
@@ -1089,7 +1085,7 @@ export function approvalSummary(root, plan) {
   }
   if (surface.hostingAuth) {
     lines.push(`Changes MCP hosting authentication: ${JSON.stringify(surface.hostingAuth.before)} → ${JSON.stringify(surface.hostingAuth.after)}.`);
-    if (surface.hostingAuth.after?.mode === 'pi-subscription') lines.push('The trusted host broker reads the shared Pi credential store internally; only selected Codex request auth reaches the isolated worker. Native refresh may extend graceful host shutdown. No API-key fallback.');
+    if (surface.hostingAuth.after?.mode === 'pi-subscription') lines.push('Trusted native lead, specialists and tools may directly access the explicitly selected shared Pi credential store. Pi owns locking/refresh; forced cancellation may interrupt persistence and require re-login. No credential isolation or API-key fallback.');
   }
   for (const p of surface.addedPackages ?? []) lines.push(`Adds package ${p}.`);
   for (const step of surface.setupCommands ?? []) lines.push(`Adds setup step: ${step.description ?? step.install ?? 'a check'}.`);
@@ -1118,7 +1114,7 @@ export function changesReach(path, before, after) {
   if (TEXT_FILES.has(path)) return false;
   if (before === null || before === undefined || after === null || after === undefined) return true;
   // Agent files: tools, model and launch settings are reach; the prompt is text.
-  if (/^\.pi\/agents\/[^/]+\.md$/.test(path)) return frontmatter(before, 'systemPrompt') !== frontmatter(after, 'systemPrompt') || frontmatter(before) === null;
+  if (/^\.pi\/agents\/[^/]+\.md$/.test(path)) return frontmatter(before) !== frontmatter(after) || frontmatter(before) === null;
   if (/^\.pi\/skills\/[^/]+\/SKILL\.md$/.test(path)) return frontmatter(before) !== frontmatter(after) || frontmatter(before) === null;
   return true;
 }

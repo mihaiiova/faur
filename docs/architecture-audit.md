@@ -587,3 +587,35 @@ its declared capabilities.
 ### 2026-11-04: #72 launch-mode correction
 
 Faur no longer generates the isolated-home subagent setting or an `async` default. The earlier stage-2 approval discussion below is historical: Faur no longer provides MCP per-call approvals. The #72 real-Pi test uses tracked generated files and verifies MCP selection in both launch modes. Foreground extension paths still require developer configuration; tool registration in the lead alone does not prove the specialist will load one.
+
+
+## Amendment — 2026-11-19: published native MCP, source cwd
+
+Supersedes the unpublished 2026-11-18 source/workspace/project-only experiment.
+The thin host launches published Pi 1.5.2 SDK sessions in source S, supplying
+absolute target T and validated JSON as advisory task context after native slash
+expansion. Relative tools/assets/commands/MCP/default specialists remain in S;
+absolute paths or shell cd T are required for target work. Native discovery
+includes ancestors and ordinary child inheritance policies, not custom isolation.
+Fresh sessions prevent conversation reuse, not shared source files/memory.
+Published session_start/direct/deferred MCP behavior replaces custom readiness;
+startup alone does not prove every server connected. Known package/resource/
+extension errors fail; calls never install code. Packaged Pi resolves child
+execution without global Pi. Registry npm ci and explicit native package installs
+are tested, with no publication prerequisite, fork or third-party changes.
+Trusted code directly shares the selected private credential store via symlink;
+no OS/credential isolation or loss-free forced refresh shutdown is claimed.
+Only the bundled maintenance extension opts out through an internal convenience
+marker, not a security guard. See mcp-serving.md for limits and tests.
+
+Real generated-project tests also exposed an existing specialist-generation bug:
+YAML `systemPrompt` was not the native specialist prompt; pi-subagents executes
+the Markdown body. Generated prompts/capability sections now occupy that body,
+with the existing ownership/hash marker trailing it. Maintenance adoption,
+reapply/reconcile and import use the same native body, preserve unknown authored
+frontmatter or refuse unrepresentable content, and retain preview/stale guards.
+No MCP-only format, compatibility mode or migration framework is introduced.
+Old projects are regenerated or authored edits explicitly reconciled. Ordinary
+multi-agent goldens change only for this correction; minimal output is unchanged.
+The fake-model real-specialist test refuses to run its scripted actions unless
+the source specialist instructions actually reach its native model context.

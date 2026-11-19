@@ -1,8 +1,5 @@
 {
   "projectRoot": "../..",
-  "tools": [
-    "read"
-  ],
   "env": [
     "AZURE_OPENAI_API_KEY",
     "AZURE_OPENAI_BASE_URL"

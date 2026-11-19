@@ -7,7 +7,6 @@ orchestrator:
   prompt: You are Jared. Respect the operation request.
 mcpServer:
   projectRoot: ../..
-  tools: [read]
   env: []
   timeoutMs: 10000
   auth:

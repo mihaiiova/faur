@@ -7,7 +7,6 @@ orchestrator:
   prompt: You are Jared. Respect the operation request.
 mcpServer:
   projectRoot: ../..
-  tools: [read]
   env: [AZURE_OPENAI_API_KEY, AZURE_OPENAI_BASE_URL]
   timeoutMs: 10000
   operations:

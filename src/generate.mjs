@@ -371,7 +371,7 @@ function readmeBody(model, packages) {
       'This project exposes selected public operations through MCP. See',
       '`.faur-mcp/README.md` for installation, local registration, runtime limits',
       'and the local Pi maintenance command. Bundled Faur is developer-only;',
-      'MCP execution uses a separate explicit capability profile.',
+      'MCP execution uses this source project through native Pi discovery.',
       'Run `pi` in this folder and use',
     ] : [
       'This project runs on Pi alone and pins no Faur package. Maintain it from',
@@ -422,13 +422,8 @@ function agentBody(agent, tools, model) {
   if (agent.inheritSkills === true) lines.push("inheritSkills: true");
   const prompt = [isNonEmptyString(agent.prompt) ? agent.prompt.replace(/\n$/, "") : "", capabilitySection(model, agent.name)]
     .filter(Boolean).map((part) => part.replace(/\n+$/, "")).join("\n\n");
-  if (prompt) {
-    lines.push("systemPrompt: |");
-    for (const line of prompt.replace(/\n$/, "").split("\n")) lines.push(`  ${line}`);
-  } else {
-    lines.push('systemPrompt: ""');
-  }
-  lines.push("---");
+  // Native pi-subagents executes the Markdown body, not a YAML systemPrompt field.
+  lines.push("---", "", prompt);
   return lines.join("\n") + "\n";
 }
 
