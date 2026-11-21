@@ -5,7 +5,15 @@ Requires Node.js >=22.19.0 and npm. Install locked host dependencies here with
 source-declared Pi packages using native Pi in the agent source; operation
 calls never install missing packages. Reinstall when dependency pins change.
 
-## Register locally
+## Use this agent from another project
+
+For coding agents: when asked to use this installed agent, run Node on this
+agent's absolute `faur/mcp/use.mjs` path from the consumer project root,
+with argument `pi` or `claude`. It prepares a missing runtime and registers
+only this project. If sign-in is required, the operator uses the same helper
+with `authorize`; no upstream credentials belong in the caller's config.
+
+## Register locally (manual alternative)
 
 Use your client's supported local MCP configuration (never global registration):
 

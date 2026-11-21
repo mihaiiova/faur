@@ -2,7 +2,7 @@
 
 **Design, generate, check, and revise specialized Pi agents.**
 
-Current release: [v0.42.0](https://github.com/mihaiiova/faur/releases/tag/v0.42.0)
+Current release: [v0.43.0](https://github.com/mihaiiova/faur/releases/tag/v0.43.0)
 — native-agent MCP serving, without modified Pi packages.
 
 Faur (formerly **Pi Forge**) is a conversational development tool
@@ -491,7 +491,7 @@ pi install /path/to/faur
 `/faur` is then available in your Pi sessions. Ordinary generated projects do
 not pin Faur; opt-in MCP-serving projects bundle its hosting/maintenance assets.
 To install this release instead of a local checkout, use
-`pi install git:github.com/mihaiiova/faur@v0.42.0`.
+`pi install git:github.com/mihaiiova/faur@v0.43.0`.
 Faur pins its own packages in `package.json` under `pi.packages`.
 
 Updating Faur does not update existing generated agents. For older MCP projects,

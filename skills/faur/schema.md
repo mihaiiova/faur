@@ -226,6 +226,8 @@ Allowed keys: `mcp` (array), `env` (array) and `cli` (array).
 
 ### `mcpServer` (opt-in public operations)
 
+Optional `upstreamOAuth: true` enables a private per-installation OAuth profile selected by Faur, separate from Codex authentication. No profile path or environment grant is required. Only its native `mcp-auth.json` and refresh locks are used by the lead's built-in MCP extension; no conversations, settings or model credentials are imported. Omit to retain per-call isolation. See [operator setup and revocation](../../docs/mcp-serving.md#upstream-oauth).
+
 Requires an orchestrator. Allowed keys:
 
 - `projectRoot` (required): absolute path or path relative to the **agent source

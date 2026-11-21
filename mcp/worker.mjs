@@ -4,6 +4,8 @@ import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { authError, authErrorCode, createSelectedAuthStore } from './subscription-auth.mjs';
 
+import { nativeCredentials } from './upstream-oauth.mjs';
+
 const failure = code => Object.assign(new Error(code), { code });
 
 // loadSdk is a development test seam, never generated configuration or public input.
@@ -43,7 +45,9 @@ export async function runWorker({ loadSdk = () => import('@earendil-works/pi-cod
     const identity = { cwd: request.source, agentDir: process.env.PI_CODING_AGENT_DIR };
     process.env.FAUR_MCP_RUNTIME = '1'; // Bundled maker opt-out only, not a security boundary.
     const settingsManager = sdk.SettingsManager.create(request.source, identity.agentDir, { projectTrusted: true });
-    const mcp = sdk.createMcpExtension();
+    const mcp = sdk.createMcpExtension(request.upstreamProfile ? {
+      credentials: await nativeCredentials(request.upstreamProfile, secrets), logPath: '/dev/null',
+    } : undefined);
     const loader = new sdk.DefaultResourceLoader({ ...identity, settingsManager, extensionFactories: [
       { name: 'codemode', factory: sdk.createCodemodeExtension(), builtin: true, replaceable: true },
       { name: 'tool_search', factory: sdk.createToolSearchExtension(), builtin: true, replaceable: true },
@@ -88,6 +92,15 @@ export async function runWorker({ loadSdk = () => import('@earendil-works/pi-cod
     // Published native MCP connects on session_start; direct/deferred waits belong to Pi.
     if (extensionFailed) throw failure('native-resources');
     if (stopping) throw failure('native-cancelled');
+    // Native noninteractive /mcp status waits for the startup handshakes. Never
+    // relay upstream diagnostics (they can include request details) or run login.
+    async function checkUpstream() {
+      if (!request.upstreamProfile) return;
+      let needsAuth = false;
+      await session.extensionRunner.getCommand('mcp').handler('', { mode: 'print', ui: { notify: text => { needsAuth ||= /^[\w-]+: needs sign-in,/m.test(text); } } });
+      if (needsAuth) throw failure('native-upstream-auth');
+    }
+    await checkUpstream();
     if (subscription) {
       await store.resolve(controller.signal, secret => secrets.add(secret));
       authenticated = true;
@@ -95,6 +108,7 @@ export async function runWorker({ loadSdk = () => import('@earendil-works/pi-cod
     // Incomplete/error turns need not enter finalized native session context.
     session.subscribe(event => { if (event.type === 'message_end' && event.message.role === 'assistant') lastAssistant = event.message; });
     await session.prompt(request.prompt);
+    await checkUpstream();
     const last = lastAssistant ?? session.messages.filter(message => message.role === 'assistant').at(-1);
     if (extensionFailed) throw failure('native-resources');
     if (last?.stopReason === 'length') throw failure('native-length');

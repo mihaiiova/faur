@@ -17,6 +17,21 @@ Pi **1.5.2**, MCP SDK **1.32.2**, Ajv **8.20.0**, TypeBox **1.1.24** and YAML
 **0.83.1** and official pi-commands git **v0.1.0**. No global Pi/Faur is needed.
 There is no pending native-API publication prerequisite.
 
+## Upstream OAuth
+
+Keep the caller registration local to Audioco and pointed at `ui-ux`. Only `ui-ux` configures Mobbin. In the `ui-ux` design retain its public operations and existing `mcpServer.auth` (if any); enable `mcpServer.upstreamOAuth: true`. Limit the upstream entry in `integrations.mcp` to:
+
+```yaml
+- name: mobbin
+  config:
+    url: <existing Mobbin MCP URL>
+    includeTools: [search_screens, search_flows]
+```
+
+No save, collection or comment tools are exposed. This is tool exposure, not a reduction of provider OAuth scopes. From the development checkout preview the revised design with `node src/faur.mjs generate ~/dev/agents/ui-ux --dry-run`. Review before applying separately. Do not edit generated `.faur-mcp` files.
+
+After approval, tell the coding agent in the consumer project: “Use the agent at ~/dev/agents/ui-ux here.” From the consumer root it runs `node ~/dev/agents/ui-ux/.faur-mcp/faur/mcp/use.mjs pi` (or `claude`). This explicit attachment installs missing runtime dependencies on first use and registers only the local server. Reconnect/reload the caller if required. For authorization, run `node ~/dev/agents/ui-ux/.faur-mcp/faur/mcp/use.mjs authorize` and choose `/mcp login mobbin`. No environment exports. The agent's canonical installation path selects a private profile under the current user's state directory; moving the installation requires signing in again. Do not copy the global store. The MCP extension alone reads the private `mcp-auth.json` and uses Pi's per-server refresh lock in the same directory, so rotated credentials survive fresh workers and concurrent hosts. The temporary Pi home, sessions and Codex selector are unchanged. Trusted same-user code is not OS-isolated. No browser login runs in a delegated call. If sign-in is required, repeat `/mcp login mobbin` in that profile. To retire access, stop callers, use `/mcp logout mobbin` there to forget local credentials, and revoke the grant at the provider to invalidate issued tokens.
+
 ## Declare and generate
 
 > /faur Create Jared in .agents/jared and expose audit and review as MCP tools.

@@ -21,7 +21,8 @@ export function mcpServerErrors(server, model) {
     for (const key of Object.keys(value)) if (!allowed.includes(key)) fail(`${path} has unknown key "${key}"`);
   };
   if (!object(server)) return ['document.mcpServer must be an object'];
-  keys(server, ['projectRoot', 'env', 'timeoutMs', 'operations', 'auth'], '');
+  keys(server, ['projectRoot', 'env', 'timeoutMs', 'operations', 'auth', 'upstreamOAuth'], '');
+  if (server.upstreamOAuth !== undefined && typeof server.upstreamOAuth !== 'boolean') fail('upstreamOAuth must be a boolean');
   if (!nonempty(server.projectRoot) || server.projectRoot.includes('\0') || server.projectRoot.startsWith('~')) fail('projectRoot must explicitly name an absolute or agent-folder-relative directory (no ~ expansion)');
   if (server.env !== undefined && (!Array.isArray(server.env) || server.env.some(name => !/^[A-Z_][A-Z0-9_]*$/.test(name) || reservedEnv.test(name)) || new Set(server.env).size !== server.env.length)) fail('env must be unique environment variable names, not execution/configuration overrides');
   if (server.auth !== undefined) {
